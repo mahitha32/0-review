@@ -7,7 +7,6 @@ const navLinks = [
     { label: 'About', href: '#about' },
     { label: 'Features', href: '#features' },
     { label: 'Workflow', href: '#workflow' },
-    { label: 'Technology', href: '#technology' },
     { label: 'Gallery', href: '#gallery' },
     { label: 'Team', href: '#team' },
     { label: 'Future Scope', href: '#future' },
@@ -38,8 +37,8 @@ export default function Navbar() {
             animate={{ y: 0 }}
             transition={{ duration: 0.6, type: 'spring', stiffness: 80 }}
             className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${scrolled
-                    ? 'bg-white/95 backdrop-blur-md shadow-nav py-2'
-                    : 'bg-transparent py-4'
+                ? 'bg-white/95 backdrop-blur-md shadow-nav py-2'
+                : 'bg-transparent py-4'
                 }`}
         >
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -70,10 +69,10 @@ export default function Navbar() {
                                 key={link.href}
                                 onClick={() => smoothScroll(link.href)}
                                 className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${activeLink === link.href
-                                        ? 'text-orange-500 bg-orange-50'
-                                        : scrolled
-                                            ? 'text-gray-700 hover:text-navy-900 hover:bg-navy-50'
-                                            : 'text-white/90 hover:text-white hover:bg-white/10'
+                                    ? 'text-orange-500 bg-orange-50'
+                                    : scrolled
+                                        ? 'text-gray-700 hover:text-navy-900 hover:bg-navy-50'
+                                        : 'text-white/90 hover:text-white hover:bg-white/10'
                                     }`}
                             >
                                 {link.label}
@@ -121,8 +120,8 @@ export default function Navbar() {
                                     key={link.href}
                                     onClick={() => smoothScroll(link.href)}
                                     className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-colors ${activeLink === link.href
-                                            ? 'bg-navy-900 text-white'
-                                            : 'text-gray-700 hover:bg-gray-50'
+                                        ? 'bg-navy-900 text-white'
+                                        : 'text-gray-700 hover:bg-gray-50'
                                         }`}
                                 >
                                     {link.label}

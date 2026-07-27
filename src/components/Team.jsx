@@ -5,7 +5,7 @@ const teamMembers = [
     {
         name: 'Dr. [Guide Name]',
         role: 'Project Guide',
-        dept: 'Prof & HOD, AI & Data Science',
+        dept: 'Prof & HOD',
         icon: '👩‍🏫',
         color: 'from-navy-700 to-navy-900',
         responsibilities: ['Project supervision', 'Technical guidance', 'Research direction', 'Quality assurance'],
@@ -14,7 +14,7 @@ const teamMembers = [
     {
         name: '[Student 1 Name]',
         role: 'Full Stack Developer',
-        dept: 'B.Tech AI & DS, 2021-25',
+        dept: 'B.Tech, 2021-25',
         icon: '👨‍💻',
         color: 'from-blue-500 to-blue-700',
         responsibilities: ['Flutter mobile app', 'Flask backend API', 'Database design', 'System architecture'],
@@ -23,7 +23,7 @@ const teamMembers = [
     {
         name: '[Student 2 Name]',
         role: 'Frontend Developer',
-        dept: 'B.Tech AI & DS, 2021-25',
+        dept: 'B.Tech, 2021-25',
         icon: '👩‍💻',
         color: 'from-emerald-500 to-emerald-700',
         responsibilities: ['React admin panel', 'UI/UX design', 'Framer animations', 'Responsive layouts'],
@@ -32,7 +32,7 @@ const teamMembers = [
     {
         name: '[Student 3 Name]',
         role: 'Data & AI Engineer',
-        dept: 'B.Tech AI & DS, 2021-25',
+        dept: 'B.Tech, 2021-25',
         icon: '🧑‍💻',
         color: 'from-purple-500 to-purple-700',
         responsibilities: ['Data modeling & MySQL', 'Firebase integration', 'Analytics module', 'Testing & QA'],
@@ -41,7 +41,7 @@ const teamMembers = [
     {
         name: '[Student 4 Name]',
         role: 'Community Liaison',
-        dept: 'B.Tech AI & DS, 2021-25',
+        dept: 'B.Tech, 2021-25',
         icon: '👩‍🔬',
         color: 'from-orange-500 to-orange-700',
         responsibilities: ['Citizen requirement gathering', 'Field testing', 'Documentation', 'Stakeholder coordination'],
@@ -65,7 +65,7 @@ export default function Team() {
                     </span>
                     <h2 className="section-title">Meet the Team</h2>
                     <p className="section-subtitle">
-                        A dedicated team of students from the Department of Artificial Intelligence & Data Science,
+                        A dedicated team of students from
                         Seshadri Rao Gudlavalleru Engineering College.
                     </p>
                 </motion.div>
@@ -106,7 +106,7 @@ export default function Team() {
                                 ))}
                             </div>
                             <div className="mt-4 bg-white/10 rounded-xl px-4 py-2 inline-block">
-                                <span className="text-white/50 text-xs">Dept. of AI & Data Science • SRGEC</span>
+                                <span className="text-white/50 text-xs">SRGEC</span>
                             </div>
                         </div>
                     </div>
@@ -170,7 +170,7 @@ export default function Team() {
                         <BookOpen className="text-navy-900" size={24} />
                         <div className="font-bold text-navy-900 font-poppins">Seshadri Rao Gudlavalleru Engineering College</div>
                     </div>
-                    <div className="text-gray-500 text-sm">Department of Artificial Intelligence & Data Science • Community Service Project 2024-25</div>
+                    <div className="text-gray-500 text-sm">Community Service Project 2024-25</div>
                 </motion.div>
             </div>
         </section>

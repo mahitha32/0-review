@@ -1,8 +1,7 @@
 import { motion } from 'framer-motion';
 import { MapPin, Mail, Phone, ExternalLink, Link2, Share2, ArrowUp, Heart } from 'lucide-react';
 
-const quickLinks = ['Home', 'About', 'Features', 'Workflow', 'Technology', 'Gallery', 'Team', 'Contact'];
-const technologies = ['Flutter', 'Python Flask', 'React.js', 'MySQL', 'Firebase', 'REST API'];
+const quickLinks = ['Home', 'About', 'Features', 'Workflow', 'Gallery', 'Team', 'Contact'];
 
 export default function Footer() {
     const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -66,18 +65,8 @@ export default function Footer() {
                         </ul>
                     </div>
 
-                    {/* Technologies & Contact */}
+                    {/* Contact */}
                     <div>
-                        <h3 className="font-bold font-poppins mb-5 text-sm uppercase tracking-wider text-white/80">Technologies</h3>
-                        <ul className="space-y-2 mb-8">
-                            {technologies.map((t) => (
-                                <li key={t} className="flex items-center space-x-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-orange-400" />
-                                    <span className="text-white/50 text-sm">{t}</span>
-                                </li>
-                            ))}
-                        </ul>
-
                         <h3 className="font-bold font-poppins mb-4 text-sm uppercase tracking-wider text-white/80">Contact</h3>
                         <div className="space-y-3">
                             <div className="flex items-start space-x-2">
@@ -100,7 +89,7 @@ export default function Footer() {
                 <div className="border-t border-white/10 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="text-center md:text-left">
                         <div className="text-white/50 text-sm">
-                            © 2024–25 Community Service Project • Dept. of AI & Data Science
+                            © 2024–25 Community Service Project
                         </div>
                         <div className="text-white/30 text-xs mt-1">
                             Seshadri Rao Gudlavalleru Engineering College, Krishna District, Andhra Pradesh

@@ -5,7 +5,6 @@ import Hero from './components/Hero';
 import About from './components/About';
 import Features from './components/Features';
 import Workflow from './components/Workflow';
-import Technology from './components/Technology';
 import Gallery from './components/Gallery';
 import Statistics from './components/Statistics';
 import FutureScope from './components/FutureScope';
@@ -75,7 +74,6 @@ export default function App() {
             <About />
             <Features />
             <Workflow />
-            <Technology />
             <Gallery />
             <Statistics />
             <FutureScope />
