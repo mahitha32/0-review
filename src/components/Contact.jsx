@@ -1,21 +1,67 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Mail, Phone, MapPin, Send, CheckCircle } from 'lucide-react';
+import { Mail, Phone, MapPin, Send, CheckCircle, AlertTriangle } from 'lucide-react';
+import { contactApi, extractErrorMessage } from '../services/api';
 
 export default function Contact() {
     const [form, setForm] = useState({ name: '', email: '', phone: '', message: '' });
     const [submitted, setSubmitted] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [successMsg, setSuccessMsg] = useState('');
 
-    const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+    const handleChange = (e) => {
+        setForm({ ...form, [e.target.name]: e.target.value });
+        if (error) setError('');
+    };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
+
+        // Basic client validation
+        const trimmedName = form.name.trim();
+        const trimmedEmail = form.email.trim();
+        const trimmedMessage = form.message.trim();
+
+        if (!trimmedName) {
+            setError('Please enter your full name.');
+            return;
+        }
+        if (!trimmedEmail || !/^\S+@\S+\.\S+$/.test(trimmedEmail)) {
+            setError('Please enter a valid email address.');
+            return;
+        }
+        if (!trimmedMessage) {
+            setError('Please enter your message.');
+            return;
+        }
+
         setLoading(true);
-        setTimeout(() => {
-            setLoading(false);
+        try {
+            const res = await contactApi.submit({
+                name: trimmedName,
+                email: trimmedEmail,
+                phone: form.phone.trim() || undefined,
+                message: trimmedMessage,
+            });
+
+            const msg = res.data?.message || 'Thank you! Your message has been received.';
+            setSuccessMsg(msg);
             setSubmitted(true);
-        }, 1500);
+        } catch (err) {
+            const errMsg = extractErrorMessage(err);
+            setError(errMsg);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleReset = () => {
+        setSubmitted(false);
+        setForm({ name: '', email: '', phone: '', message: '' });
+        setError('');
+        setSuccessMsg('');
     };
 
     return (
@@ -34,7 +80,7 @@ export default function Contact() {
                     <h2 className="section-title">Contact Us</h2>
                     <p className="section-subtitle">
                         Have questions about this project, or want to report an issue directly?
-                        Reach out to the project team or the Vemavaram Village admin.
+                        Reach out to the project team or the Vemavaram Village administration.
                     </p>
                 </motion.div>
 
@@ -57,22 +103,35 @@ export default function Contact() {
                                     <CheckCircle className="text-emerald-500 mx-auto mb-4" size={64} />
                                 </motion.div>
                                 <h3 className="text-2xl font-bold text-navy-900 font-poppins mb-2">Message Sent!</h3>
-                                <p className="text-gray-500">Thank you for reaching out. The project team will get back to you within 24 hours.</p>
+                                <p className="text-gray-500 max-w-md">
+                                    {successMsg || 'Thank you for reaching out. The project team will get back to you within 24 hours.'}
+                                </p>
                                 <button
-                                    onClick={() => { setSubmitted(false); setForm({ name: '', email: '', phone: '', message: '' }); }}
-                                    className="mt-6 btn-primary"
+                                    onClick={handleReset}
+                                    className="mt-6 px-6 py-3 bg-navy-900 hover:bg-navy-800 text-white font-semibold rounded-xl shadow-md transition-all"
                                 >
-                                    Send Another
+                                    Send Another Message
                                 </button>
                             </div>
                         ) : (
                             <form onSubmit={handleSubmit} className="space-y-5">
                                 <h3 className="text-xl font-bold text-navy-900 font-poppins mb-6">Send a Message</h3>
 
+                                {error && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm flex items-start space-x-2"
+                                    >
+                                        <AlertTriangle size={18} className="mt-0.5 flex-shrink-0" />
+                                        <span>{error}</span>
+                                    </motion.div>
+                                )}
+
                                 {[
                                     { name: 'name', label: 'Full Name', type: 'text', placeholder: 'Your full name', required: true },
                                     { name: 'email', label: 'Email Address', type: 'email', placeholder: 'your@email.com', required: true },
-                                    { name: 'phone', label: 'Phone Number', type: 'tel', placeholder: '+91 XXXXX XXXXX', required: false },
+                                    { name: 'phone', label: 'Phone Number', type: 'tel', placeholder: '+91 98765 43210', required: false },
                                 ].map((field) => (
                                     <div key={field.name}>
                                         <label className="block text-sm font-semibold text-gray-700 mb-1.5">
@@ -85,7 +144,8 @@ export default function Contact() {
                                             value={form[field.name]}
                                             onChange={handleChange}
                                             placeholder={field.placeholder}
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-navy-300 focus:border-transparent transition-all text-sm"
+                                            disabled={loading}
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-navy-300 focus:border-transparent transition-all text-sm disabled:bg-gray-100"
                                         />
                                     </div>
                                 ))}
@@ -100,20 +160,24 @@ export default function Contact() {
                                         rows={4}
                                         value={form.message}
                                         onChange={handleChange}
-                                        placeholder="Describe your complaint or inquiry..."
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-navy-300 focus:border-transparent transition-all text-sm resize-none"
+                                        placeholder="Describe your complaint, inquiry or suggestion..."
+                                        disabled={loading}
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-navy-300 focus:border-transparent transition-all text-sm resize-none disabled:bg-gray-100"
                                     />
                                 </div>
 
                                 <motion.button
                                     type="submit"
                                     disabled={loading}
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    className="w-full flex items-center justify-center space-x-2 bg-navy-900 hover:bg-navy-800 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-60"
+                                    whileHover={{ scale: loading ? 1 : 1.02 }}
+                                    whileTap={{ scale: loading ? 1 : 0.98 }}
+                                    className="w-full flex items-center justify-center space-x-2 bg-navy-900 hover:bg-navy-800 text-white font-bold py-4 rounded-xl transition-all disabled:opacity-60 shadow-lg"
                                 >
                                     {loading ? (
-                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        <div className="flex items-center space-x-2">
+                                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            <span>Submitting message...</span>
+                                        </div>
                                     ) : (
                                         <>
                                             <Send size={18} />
@@ -136,8 +200,8 @@ export default function Contact() {
                         {/* Contact info cards */}
                         {[
                             { icon: MapPin, title: 'Village Location', value: 'Vemavaram Village, Krishna District, Andhra Pradesh - 521 000', color: 'from-blue-500 to-blue-600' },
-                            { icon: Mail, title: 'Email Address', value: 'villageconnect@srgec.ac.in', color: 'from-emerald-500 to-emerald-600' },
-                            { icon: Phone, title: 'Contact Number', value: '+91 XXXXX XXXXX', color: 'from-orange-500 to-orange-600' },
+                            { icon: Mail, title: 'Official Email', value: 'admin@vemavaram.gov.in', color: 'from-emerald-500 to-emerald-600' },
+                            { icon: Phone, title: 'Helpline Number', value: '+91 8674 200 100', color: 'from-orange-500 to-orange-600' },
                         ].map((info) => (
                             <motion.div
                                 key={info.title}
@@ -154,10 +218,9 @@ export default function Contact() {
                             </motion.div>
                         ))}
 
-                        {/* Google Maps Placeholder */}
+                        {/* Google Maps / Location Info */}
                         <div className="bg-white rounded-3xl overflow-hidden shadow-card border border-gray-100">
                             <div className="h-52 bg-gradient-to-br from-blue-50 to-emerald-50 flex items-center justify-center relative">
-                                {/* Fake map grid */}
                                 <div
                                     className="absolute inset-0 opacity-30"
                                     style={{
@@ -165,7 +228,6 @@ export default function Contact() {
                                         backgroundSize: '30px 30px',
                                     }}
                                 />
-                                {/* Roads */}
                                 <div className="absolute inset-0">
                                     <div className="absolute top-1/2 left-0 right-0 h-1 bg-navy-200/50 -translate-y-1/2" />
                                     <div className="absolute left-1/2 top-0 bottom-0 w-1 bg-navy-200/50 -translate-x-1/2" />
@@ -182,7 +244,7 @@ export default function Contact() {
                                 </div>
                             </div>
                             <div className="p-4 flex items-center justify-between">
-                                <span className="text-sm text-gray-600">📍 Embed Google Maps here</span>
+                                <span className="text-sm text-gray-600">📍 Gram Panchayat Office</span>
                                 <a
                                     href="https://maps.google.com/?q=Vemavaram,Andhra+Pradesh"
                                     target="_blank"

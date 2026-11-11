@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import About from './components/About';
@@ -11,6 +12,12 @@ import FutureScope from './components/FutureScope';
 import Team from './components/Team';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
+
+// Citizen & Worker Modals
+import CitizenAuthModal from './components/portal/CitizenAuthModal';
+import TrackModal from './components/portal/TrackModal';
+import CitizenDashboardModal from './components/portal/CitizenDashboardModal';
+import WorkerPortalModal from './components/portal/WorkerPortalModal';
 
 function Loader() {
   return (
@@ -52,37 +59,132 @@ function Loader() {
   );
 }
 
+function MainWebsite() {
+  const { isAuthenticated } = useAuth();
+
+  // Modals state
+  const [isTrackOpen, setTrackOpen] = useState(false);
+  const [isAuthOpen, setAuthOpen] = useState(false);
+  const [authTab, setAuthTab] = useState('login');
+  const [isDashboardOpen, setDashboardOpen] = useState(false);
+  const [isWorkerOpen, setWorkerOpen] = useState(false);
+
+  const handleOpenReport = () => {
+    if (isAuthenticated) {
+      setDashboardOpen(true);
+    } else {
+      setAuthTab('login');
+      setAuthOpen(true);
+    }
+  };
+
+  const handleOpenTrack = () => {
+    setTrackOpen(true);
+  };
+
+  const handleOpenAuth = () => {
+    setAuthTab('login');
+    setAuthOpen(true);
+  };
+
+  const handleOpenDashboard = () => {
+    setDashboardOpen(true);
+  };
+
+  const handleOpenWorker = () => {
+    setWorkerOpen(true);
+  };
+
+  return (
+    <div className="min-h-screen font-inter">
+      <Navbar
+        onOpenTrack={handleOpenTrack}
+        onOpenReport={handleOpenReport}
+        onOpenAuth={handleOpenAuth}
+        onOpenDashboard={handleOpenDashboard}
+        onOpenWorker={handleOpenWorker}
+      />
+
+      <main>
+        <Hero
+          onOpenReport={handleOpenReport}
+          onOpenTrack={handleOpenTrack}
+        />
+        <About />
+        <Features />
+        <Workflow />
+        <Gallery />
+        <Statistics />
+        <FutureScope />
+        <Team />
+        <Contact />
+      </main>
+
+      <Footer onOpenWorker={handleOpenWorker} />
+
+      {/* Citizen Modals */}
+      <AnimatePresence>
+        {isTrackOpen && (
+          <TrackModal
+            isOpen={isTrackOpen}
+            onClose={() => setTrackOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isAuthOpen && (
+          <CitizenAuthModal
+            isOpen={isAuthOpen}
+            onClose={() => setAuthOpen(false)}
+            initialTab={authTab}
+            onAuthSuccess={() => setDashboardOpen(true)}
+            onOpenWorker={() => {
+              setAuthOpen(false);
+              setWorkerOpen(true);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isDashboardOpen && (
+          <CitizenDashboardModal
+            isOpen={isDashboardOpen}
+            onClose={() => setDashboardOpen(false)}
+            onTrackComplaint={handleOpenTrack}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Field Worker Portal Modal */}
+      <AnimatePresence>
+        {isWorkerOpen && (
+          <WorkerPortalModal
+            isOpen={isWorkerOpen}
+            onClose={() => setWorkerOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 2000);
+    const timer = setTimeout(() => setLoading(false), 1800);
     return () => clearTimeout(timer);
   }, []);
 
   return (
-    <>
+    <AuthProvider>
       <AnimatePresence>
         {loading && <Loader />}
       </AnimatePresence>
 
-      {!loading && (
-        <div className="min-h-screen font-inter">
-          <Navbar />
-          <main>
-            <Hero />
-            <About />
-            <Features />
-            <Workflow />
-            <Gallery />
-            <Statistics />
-            <FutureScope />
-            <Team />
-            <Contact />
-          </main>
-          <Footer />
-        </div>
-      )}
-    </>
+      {!loading && <MainWebsite />}
+    </AuthProvider>
   );
 }

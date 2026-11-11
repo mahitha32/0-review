@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { AlertCircle, ChevronDown, Shield, Users, Star } from 'lucide-react';
+import { AlertCircle, ChevronDown, Shield, Users, Star, Search } from 'lucide-react';
 
 const floatingBadges = [
     { icon: Shield, label: 'Secure & Verified', color: 'from-blue-500 to-blue-600', x: 'left-4', y: 'top-24' },
@@ -7,7 +7,7 @@ const floatingBadges = [
     { icon: Star, label: '4.8 Satisfaction Rate', color: 'from-orange-400 to-orange-500', x: 'left-4', y: 'bottom-32' },
 ];
 
-export default function Hero() {
+export default function Hero({ onOpenReport, onOpenTrack }) {
     const scrollTo = (id) => {
         document.querySelector(id)?.scrollIntoView({ behavior: 'smooth' });
     };
@@ -103,7 +103,7 @@ export default function Hero() {
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
-                                onClick={() => scrollTo('#contact')}
+                                onClick={onOpenReport}
                                 className="flex items-center space-x-2 bg-orange-500 hover:bg-orange-400 text-white font-bold px-8 py-4 rounded-full transition-all duration-300 shadow-2xl hover:shadow-orange-500/40 glow"
                             >
                                 <AlertCircle size={20} />
@@ -113,8 +113,18 @@ export default function Hero() {
                             <motion.button
                                 whileHover={{ scale: 1.05 }}
                                 whileTap={{ scale: 0.95 }}
-                                onClick={() => scrollTo('#about')}
+                                onClick={onOpenTrack}
                                 className="flex items-center space-x-2 border-2 border-white/50 text-white hover:bg-white hover:text-navy-900 font-semibold px-8 py-4 rounded-full transition-all duration-300 backdrop-blur-sm"
+                            >
+                                <Search size={18} className="text-orange-400" />
+                                <span>Track Status</span>
+                            </motion.button>
+
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => scrollTo('#about')}
+                                className="flex items-center space-x-2 text-white/80 hover:text-white font-medium px-4 py-4 rounded-full transition-all duration-300"
                             >
                                 <span>Learn More</span>
                                 <ChevronDown size={18} />

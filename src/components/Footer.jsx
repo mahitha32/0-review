@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
-import { MapPin, Mail, Phone, ExternalLink, Link2, Share2, ArrowUp, Heart } from 'lucide-react';
+import { MapPin, Mail, Phone, ExternalLink, Link2, Share2, ArrowUp, Heart, Wrench } from 'lucide-react';
 
 const quickLinks = ['Home', 'About', 'Features', 'Workflow', 'Gallery', 'Team', 'Contact'];
 
-export default function Footer() {
+export default function Footer({ onOpenWorker }) {
     const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
     const scrollTo = (id) => {
         document.querySelector(`#${id.toLowerCase().replace(' ', '')}`)?.scrollIntoView({ behavior: 'smooth' });
@@ -62,6 +62,17 @@ export default function Footer() {
                                     </button>
                                 </li>
                             ))}
+                            {onOpenWorker && (
+                                <li className="pt-2 border-t border-white/10">
+                                    <button
+                                        onClick={onOpenWorker}
+                                        className="text-orange-400 hover:text-orange-300 text-xs font-semibold flex items-center space-x-1.5 transition-colors"
+                                    >
+                                        <Wrench size={13} />
+                                        <span>Worker Portal</span>
+                                    </button>
+                                </li>
+                            )}
                         </ul>
                     </div>
 
