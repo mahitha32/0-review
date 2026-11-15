@@ -24,15 +24,15 @@ services:
       - key: DB_NAME
         value: vemavaram_csp
       - key: DB_USER
-        value: 2gTwxEHDidZGkwa.root
+        sync: false
       - key: DB_PASSWORD
         sync: false
       - key: DB_SSL_MODE
         value: REQUIRED
       - key: CLOUDINARY_CLOUD_NAME
-        value: vslqythf
+        sync: false
       - key: CLOUDINARY_API_KEY
-        value: "114721286415457"
+        sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
       - key: ALLOWED_ORIGINS

@@ -301,6 +301,40 @@ def track_complaint_public(complaint_id):
 
 
 # ─────────────────────────────────────────────
+# GET /api/complaints/gallery
+# Public project gallery: verified complaints and resolution evidence photos
+# ─────────────────────────────────────────────
+@complaints_bp.route("/gallery", methods=["GET"])
+def get_gallery():
+    limit = int(request.args.get("limit", 12))
+    limit = min(max(1, limit), 50)
+    category = request.args.get("category", "").strip()
+
+    query = """
+        SELECT complaint_id, title, category, description, location,
+               status, priority, image_url, resolution_image_url, resolution_notes,
+               created_at, resolved_at
+        FROM complaints
+        WHERE (image_url IS NOT NULL AND image_url != '')
+           OR (resolution_image_url IS NOT NULL AND resolution_image_url != '')
+    """
+    params = []
+    if category:
+        query += " AND category = %s"
+        params.append(category)
+
+    query += " ORDER BY COALESCE(resolved_at, created_at) DESC LIMIT %s"
+    params.append(limit)
+
+    db = get_db()
+    with db.cursor() as cursor:
+        cursor.execute(query, tuple(params))
+        items = cursor.fetchall()
+
+    return success_response(data={"items": items, "count": len(items)})
+
+
+# ─────────────────────────────────────────────
 # GET /api/complaints/categories
 # List all valid complaint categories
 # ─────────────────────────────────────────────
