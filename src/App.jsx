@@ -9,7 +9,6 @@ import Workflow from './components/Workflow';
 import Gallery from './components/Gallery';
 import Statistics from './components/Statistics';
 import FutureScope from './components/FutureScope';
-import Team from './components/Team';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
 
@@ -116,7 +115,6 @@ function MainWebsite() {
         <Gallery />
         <Statistics />
         <FutureScope />
-        <Team />
         <Contact />
       </main>
 

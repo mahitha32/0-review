@@ -9,7 +9,6 @@ const navLinks = [
     { label: 'Features', href: '#features' },
     { label: 'Workflow', href: '#workflow' },
     { label: 'Gallery', href: '#gallery' },
-    { label: 'Team', href: '#team' },
     { label: 'Future Scope', href: '#future' },
     { label: 'Contact', href: '#contact' },
 ];

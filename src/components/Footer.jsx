@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { MapPin, Mail, Phone, ExternalLink, Link2, Share2, ArrowUp, Heart, Wrench } from 'lucide-react';
 
-const quickLinks = ['Home', 'About', 'Features', 'Workflow', 'Gallery', 'Team', 'Contact'];
+const quickLinks = ['Home', 'About', 'Features', 'Workflow', 'Gallery', 'Contact'];
 
 export default function Footer({ onOpenWorker }) {
     const scrollTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });

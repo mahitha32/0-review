@@ -118,6 +118,7 @@ export const complaintsApi = {
   getMyComplaints: (params) => api.get('/complaints', { params }),
   getById: (id) => api.get(`/complaints/${id}`),
   trackPublic: (id) => api.get(`/complaints/track/${id}`),
+  getGallery: (params) => api.get('/complaints/gallery', { params }),
 };
 
 // ── Feedback API ─────────────────────────────────────────────
