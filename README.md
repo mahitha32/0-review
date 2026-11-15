@@ -10,8 +10,11 @@
 An end-to-end, multi-tier Digital Governance and Smart Village Complaint Redressal System engineered for **Vemavaram Village**, Krishna District, Andhra Pradesh.
 
 - **Live Citizen Portal**: [https://complaintredressalsystem.vercel.app/](https://complaintredressalsystem.vercel.app/)
-- **Citizen Portal Repository**: [https://github.com/mahitha32/0-review.git](https://github.com/mahitha32/0-review.git)
-- **Main System Repository**: [https://github.com/mahitha32/csp_teamA6.git](https://github.com/mahitha32/csp_teamA6.git)
+- **Repository**: [https://github.com/mahitha32/csp_teamA6.git](https://github.com/mahitha32/csp_teamA6.git)
+- **Citizen Portal Source**: Located in [`website/`](website/) and deployed to Vercel
+- **Admin Dashboard Source**: Located in [`admin_dashboard/`](admin_dashboard/)
+- **Backend API Source**: Located in [`backend/`](backend/) and deployed to Render
+- **Mobile Application Source**: Located in [`mobile_app/`](mobile_app/)
 
 ---
 

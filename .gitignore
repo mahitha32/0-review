@@ -48,10 +48,13 @@ wheels/
 .coverage
 htmlcov/
 
-# Node & Frontend artifacts (Admin Dashboard)
+# Node & Frontend artifacts (Admin Dashboard & Citizen Website)
 node_modules/
 admin_dashboard/dist/
 admin_dashboard/dist-ssr/
+website/dist/
+website/dist-ssr/
+website/.vercel/
 .pnp
 .pnp.js
 
