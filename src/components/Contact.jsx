@@ -199,9 +199,9 @@ export default function Contact() {
                     >
                         {/* Contact info cards */}
                         {[
-                            { icon: MapPin, title: 'Village Location', value: 'Vemavaram Village, Krishna District, Andhra Pradesh - 521 000', color: 'from-blue-500 to-blue-600' },
-                            { icon: Mail, title: 'Official Email', value: 'admin@vemavaram.gov.in', color: 'from-emerald-500 to-emerald-600' },
-                            { icon: Phone, title: 'Helpline Number', value: '+91 8674 200 100', color: 'from-orange-500 to-orange-600' },
+                            { icon: MapPin, title: 'Village Location', value: 'Vemavaram Village, Krishna District, Andhra Pradesh - 521 000', color: 'from-blue-500 to-blue-600', href: null },
+                            { icon: Mail, title: 'Official Email', value: 'gadalamahithavasavi@gmail.com', color: 'from-emerald-500 to-emerald-600', href: 'mailto:gadalamahithavasavi@gmail.com' },
+                            { icon: Phone, title: 'Helpline Number', value: '+91 8674 200 100', color: 'from-orange-500 to-orange-600', href: 'tel:+918674200100' },
                         ].map((info) => (
                             <motion.div
                                 key={info.title}
@@ -211,9 +211,18 @@ export default function Contact() {
                                 <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${info.color} flex items-center justify-center flex-shrink-0 shadow-lg`}>
                                     <info.icon className="text-white" size={20} />
                                 </div>
-                                <div>
+                                <div className="min-w-0 flex-1">
                                     <div className="font-semibold text-gray-800 font-poppins text-sm">{info.title}</div>
-                                    <div className="text-gray-500 text-sm">{info.value}</div>
+                                    {info.href ? (
+                                        <a
+                                            href={info.href}
+                                            className="text-gray-500 hover:text-orange-500 transition-colors text-sm break-all font-medium inline-block"
+                                        >
+                                            {info.value}
+                                        </a>
+                                    ) : (
+                                        <div className="text-gray-500 text-sm leading-relaxed">{info.value}</div>
+                                    )}
                                 </div>
                             </motion.div>
                         ))}
