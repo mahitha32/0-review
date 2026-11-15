@@ -54,6 +54,15 @@ class Config:
     MSG91_TEMPLATE_ID = os.getenv("MSG91_TEMPLATE_ID", "")
     MSG91_SENDER_ID  = os.getenv("MSG91_SENDER_ID", "VEMVLG")
 
+    # SMTP / Outbound Email Notifications
+    SMTP_HOST               = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT               = int(os.getenv("SMTP_PORT", 587))
+    SMTP_USER               = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD           = os.getenv("SMTP_PASSWORD", "")
+    SMTP_USE_TLS           = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+    SMTP_FROM_EMAIL         = os.getenv("SMTP_FROM_EMAIL", "") or os.getenv("SMTP_USER", "")
+    ADMIN_NOTIFICATION_EMAIL = os.getenv("ADMIN_NOTIFICATION_EMAIL", "gadalamahithavasavi@gmail.com")
+
     # CORS — includes both local dev and production Vercel URL
     ALLOWED_ORIGINS = os.getenv(
         "ALLOWED_ORIGINS",

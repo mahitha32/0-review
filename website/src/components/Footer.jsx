@@ -86,7 +86,12 @@ export default function Footer({ onOpenWorker }) {
                             </div>
                             <div className="flex items-center space-x-2">
                                 <Mail size={14} className="text-orange-400 flex-shrink-0" />
-                                <span className="text-white/50 text-xs">villageconnect@srgec.ac.in</span>
+                                <a
+                                    href="mailto:gadalamahithavasavi@gmail.com"
+                                    className="text-white/50 hover:text-orange-400 transition-colors text-xs break-all"
+                                >
+                                    gadalamahithavasavi@gmail.com
+                                </a>
                             </div>
                             <div className="flex items-center space-x-2">
                                 <Phone size={14} className="text-orange-400 flex-shrink-0" />

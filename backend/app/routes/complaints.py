@@ -11,6 +11,7 @@ from app import get_db
 from app.services.image_service import upload_image
 from app.services.ai_classifier import classify_complaint
 from app.services.notification_service import notify_complaint_received
+from app.services.email_service import send_complaint_notification_email
 from app.utils.helpers import success_response, error_response, format_complaint_id
 
 complaints_bp = Blueprint("complaints", __name__)
@@ -120,8 +121,36 @@ def create_complaint():
         )
     db.commit()
 
-    # Trigger notification
+    # Trigger in-app & push notification to citizen
     notify_complaint_received(user_id, complaint_id)
+
+    # Fetch citizen name for personalized official email alert
+    citizen_name = "Citizen"
+    try:
+        with db.cursor() as cursor:
+            cursor.execute("SELECT name FROM users WHERE user_id = %s", (user_id,))
+            user_row = cursor.fetchone()
+            if user_row and user_row.get("name"):
+                citizen_name = user_row["name"]
+    except Exception:
+        pass
+
+    # Send outgoing email notification to official admin email (gadalamahithavasavi@gmail.com)
+    try:
+        submission_date_str = datetime.now().strftime("%d %b %Y, %I:%M %p")
+        send_complaint_notification_email(
+            complaint_id=complaint_id,
+            title=title,
+            category=category,
+            description=description,
+            submission_date=submission_date_str,
+            citizen_name=citizen_name,
+            status="Submitted",
+            image_url=image_url,
+        )
+    except Exception as email_err:
+        from flask import current_app
+        current_app.logger.error(f"Outgoing complaint email alert error (non-fatal): {email_err}")
 
     return success_response(
         data={
