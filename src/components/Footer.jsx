@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { MapPin, Mail, Phone, ExternalLink, Link2, Share2, ArrowUp, Heart, Wrench } from 'lucide-react';
+import { MapPin, Mail, Phone, ExternalLink, Link2, Share2, ArrowUp, Heart, Wrench, ShieldCheck } from 'lucide-react';
 
 const quickLinks = ['Home', 'About', 'Features', 'Workflow', 'Gallery', 'Contact'];
 
@@ -73,6 +73,15 @@ export default function Footer({ onOpenWorker }) {
                                     </button>
                                 </li>
                             )}
+                            <li className="pt-2 border-t border-white/10">
+                                <a
+                                    href="/admin/login"
+                                    className="text-emerald-400 hover:text-emerald-300 text-xs font-semibold flex items-center space-x-1.5 transition-colors"
+                                >
+                                    <ShieldCheck size={13} />
+                                    <span>Panchayat Admin Login</span>
+                                </a>
+                            </li>
                         </ul>
                     </div>
 
