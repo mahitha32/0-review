@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, MapPin, AlertCircle, Search, User, LogOut, Wrench } from 'lucide-react';
+import { Menu, X, MapPin, AlertCircle, Search, User, LogOut, Wrench, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const navLinks = [
@@ -156,6 +157,20 @@ export default function Navbar({ onOpenTrack, onOpenReport, onOpenAuth, onOpenDa
                                 <Wrench size={14} />
                             </motion.button>
                         )}
+
+                        {/* Admin Portal Link */}
+                        <Link
+                            to="/admin/login"
+                            title="Panchayat Admin Portal"
+                            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${
+                                scrolled
+                                    ? 'border-emerald-200 text-emerald-800 bg-emerald-50 hover:bg-emerald-100'
+                                    : 'border-white/30 text-white hover:bg-white/10 backdrop-blur-sm'
+                            }`}
+                        >
+                            <ShieldCheck size={14} className={scrolled ? "text-emerald-600" : "text-emerald-400"} />
+                            <span>Admin</span>
+                        </Link>
                     </div>
 
                     {/* Mobile Menu Toggle */}
@@ -261,6 +276,20 @@ export default function Navbar({ onOpenTrack, onOpenReport, onOpenAuth, onOpenDa
                                     </button>
                                 </div>
                             )}
+
+                            <div className="border-t border-gray-100 pt-2">
+                                <Link
+                                    to="/admin/login"
+                                    onClick={() => setMenuOpen(false)}
+                                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+                                >
+                                    <span className="flex items-center space-x-2">
+                                        <ShieldCheck size={14} className="text-emerald-600" />
+                                        <span>Panchayat Admin Portal</span>
+                                    </span>
+                                    <span>→</span>
+                                </Link>
+                            </div>
                         </div>
                     </motion.div>
                 )}

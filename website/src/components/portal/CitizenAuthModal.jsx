@@ -470,6 +470,19 @@ export default function CitizenAuthModal({ isOpen, onClose, initialTab = 'login'
                             </button>
                         </div>
                     )}
+
+                    <div className="mt-2.5 pt-2.5 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                        <span className="flex items-center space-x-1.5">
+                            <ShieldCheck size={13} className="text-emerald-600" />
+                            <span>Panchayat Official / Admin?</span>
+                        </span>
+                        <a
+                            href="/admin/login"
+                            className="font-bold text-emerald-700 hover:text-emerald-800 transition-colors"
+                        >
+                            Admin Login →
+                        </a>
+                    </div>
                 </div>
             </motion.div>
         </div>

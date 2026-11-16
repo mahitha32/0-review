@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { AdminAuthProvider } from './admin/context/AuthContext';
+import AdminLogin from './admin/pages/Login';
+import AdminApp from './admin/AdminApp';
+
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import About from './components/About';
@@ -48,7 +54,7 @@ function Loader() {
             className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full"
             initial={{ width: '0%' }}
             animate={{ width: '100%' }}
-            transition={{ duration: 1.8, ease: 'easeInOut' }}
+            transition={{ duration: 1.2, ease: 'easeInOut' }}
           />
         </div>
 
@@ -58,15 +64,21 @@ function Loader() {
   );
 }
 
-function MainWebsite() {
+function MainWebsite({ autoOpenAuth = false }) {
   const { isAuthenticated } = useAuth();
 
   // Modals state
   const [isTrackOpen, setTrackOpen] = useState(false);
-  const [isAuthOpen, setAuthOpen] = useState(false);
+  const [isAuthOpen, setAuthOpen] = useState(autoOpenAuth && !isAuthenticated);
   const [authTab, setAuthTab] = useState('login');
   const [isDashboardOpen, setDashboardOpen] = useState(false);
   const [isWorkerOpen, setWorkerOpen] = useState(false);
+
+  useEffect(() => {
+    if (autoOpenAuth && !isAuthenticated) {
+      setAuthOpen(true);
+    }
+  }, [autoOpenAuth, isAuthenticated]);
 
   const handleOpenReport = () => {
     if (isAuthenticated) {
@@ -172,17 +184,44 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1800);
+    const timer = setTimeout(() => setLoading(false), 800);
     return () => clearTimeout(timer);
   }, []);
 
   return (
-    <AuthProvider>
-      <AnimatePresence>
-        {loading && <Loader />}
-      </AnimatePresence>
+    <BrowserRouter>
+      <AuthProvider>
+        <AdminAuthProvider>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              style: { fontFamily: 'Inter, sans-serif', fontSize: 14, borderRadius: 10 },
+            }}
+          />
+          <AnimatePresence>
+            {loading && <Loader />}
+          </AnimatePresence>
 
-      {!loading && <MainWebsite />}
-    </AuthProvider>
+          {!loading && (
+            <Routes>
+              {/* Public Village Portal */}
+              <Route path="/" element={<MainWebsite />} />
+              <Route path="/login" element={<MainWebsite autoOpenAuth={true} />} />
+              <Route path="/citizen-login" element={<MainWebsite autoOpenAuth={true} />} />
+
+              {/* Admin Portal Authentication */}
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/admin-login" element={<Navigate to="/admin/login" replace />} />
+
+              {/* Protected Admin Dashboard Shell */}
+              <Route path="/admin/*" element={<AdminApp />} />
+
+              {/* Fallback to Public Village Portal */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          )}
+        </AdminAuthProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
