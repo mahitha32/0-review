@@ -114,6 +114,7 @@ def create_app(env: str = None) -> Flask:
     from app.routes.assets        import assets_bp
     from app.routes.reports       import reports_bp
     from app.routes.contact       import contact_bp
+    from app.routes.resident_verification import resident_verification_bp
 
     app.register_blueprint(auth_bp,          url_prefix="/api/auth")
     app.register_blueprint(complaints_bp,    url_prefix="/api/complaints")
@@ -125,6 +126,7 @@ def create_app(env: str = None) -> Flask:
     app.register_blueprint(assets_bp,        url_prefix="/api/assets")
     app.register_blueprint(reports_bp,       url_prefix="/api/reports")
     app.register_blueprint(contact_bp,       url_prefix="/api/contact")
+    app.register_blueprint(resident_verification_bp, url_prefix="/api/resident-verification")
 
     # ── Health check ─────────────────────────────────────────
     @app.route("/api/health")

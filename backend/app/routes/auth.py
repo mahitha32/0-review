@@ -9,6 +9,8 @@ Roles:
   - admin   : System admin, logs in with mobile + password
 """
 
+import random
+from datetime import datetime, timedelta
 import bcrypt
 from flask import Blueprint, request
 from flask_jwt_extended import (
@@ -26,8 +28,97 @@ auth_bp = Blueprint("auth", __name__)
 
 
 # ─────────────────────────────────────────────
+# POST /api/auth/send-otp
+# Send SMS OTP for mobile verification
+# ─────────────────────────────────────────────
+@auth_bp.route("/send-otp", methods=["POST"])
+def send_otp():
+    data    = request.get_json(silent=True) or {}
+    mobile  = normalize_mobile(data.get("mobile", "").strip())
+    purpose = data.get("purpose", "registration")
+    if purpose not in ("registration", "login", "forgot_password"):
+        purpose = "registration"
+
+    if not mobile or not validate_mobile(mobile):
+        return error_response("Valid 10-digit mobile number is required", 422)
+
+    otp_code = str(random.randint(100000, 999999))
+    expires_at = datetime.now() + timedelta(minutes=10)
+
+    db = get_db()
+    with db.cursor() as cursor:
+        cursor.execute(
+            """INSERT INTO otp_sessions (mobile, otp_code, purpose, is_used, attempts, expires_at)
+               VALUES (%s, %s, %s, 0, 0, %s)""",
+            (mobile, otp_code, purpose, expires_at)
+        )
+    db.commit()
+
+    return success_response(
+        data={
+            "mobile": mobile,
+            "purpose": purpose,
+            "expires_in": 600,
+            "otp_code": otp_code
+        },
+        message=f"OTP sent successfully to {mobile}"
+    )
+
+
+# ─────────────────────────────────────────────
+# POST /api/auth/verify-otp
+# Verify mobile OTP code
+# ─────────────────────────────────────────────
+@auth_bp.route("/verify-otp", methods=["POST"])
+def verify_otp():
+    data     = request.get_json(silent=True) or {}
+    mobile   = normalize_mobile(data.get("mobile", "").strip())
+    otp_code = (data.get("otp_code") or "").strip()
+    purpose  = data.get("purpose", "registration")
+
+    if not mobile or not otp_code:
+        return error_response("Mobile and OTP code are required", 422)
+
+    db = get_db()
+    with db.cursor() as cursor:
+        cursor.execute(
+            """SELECT * FROM otp_sessions
+               WHERE mobile = %s AND purpose = %s AND is_used = 0
+               ORDER BY created_at DESC LIMIT 1""",
+            (mobile, purpose)
+        )
+        session = cursor.fetchone()
+
+        if not session:
+            return error_response("No active OTP request found. Please request an OTP first.", 404)
+
+        if session["expires_at"] < datetime.now():
+            return error_response("OTP has expired. Please request a new OTP.", 400)
+
+        if session["otp_code"] != otp_code:
+            cursor.execute(
+                "UPDATE otp_sessions SET attempts = attempts + 1 WHERE session_id = %s",
+                (session["session_id"],)
+            )
+            db.commit()
+            return error_response("Invalid OTP code. Please enter the correct 6-digit code.", 400)
+
+        # Mark OTP as used
+        cursor.execute(
+            "UPDATE otp_sessions SET is_used = 1 WHERE session_id = %s",
+            (session["session_id"],)
+        )
+    db.commit()
+
+    return success_response(
+        data={"verified": True, "mobile": mobile},
+        message="Mobile number verified successfully"
+    )
+
+
+# ─────────────────────────────────────────────
 # POST /api/auth/register
-# Citizen web/app registration (mobile + password)
+# Citizen web/app registration (mobile + password + residency verification)
 # ─────────────────────────────────────────────
 @auth_bp.route("/register", methods=["POST"])
 def register():
@@ -36,6 +127,19 @@ def register():
     mobile   = normalize_mobile(data.get("mobile", "").strip())
     password = data.get("password", "").strip()
     village  = data.get("village", "Vemavaram").strip() or "Vemavaram"
+
+    # Residency declaration & verification inputs
+    resides_in_village = data.get("resides_in_village")
+    if isinstance(resides_in_village, str):
+        resides_in_village = resides_in_village.lower() in ("true", "1", "yes")
+    elif resides_in_village is None:
+        resides_in_village = True
+    else:
+        resides_in_village = bool(resides_in_village)
+
+    ward_id           = data.get("ward_id")
+    address           = (data.get("address") or "").strip()
+    verification_code = (data.get("verification_code") or "").strip().upper()
 
     errors = []
     if not name:
@@ -56,13 +160,56 @@ def register():
         if cursor.fetchone():
             return error_response("A user with this mobile number already exists", 409)
 
+        residency_status = "unverified"
+        verified_at = None
+        verification_remarks = None
+        code_entry = None
+
+        if verification_code:
+            cursor.execute(
+                """SELECT * FROM village_verification_codes
+                   WHERE code = %s AND is_used = 0
+                     AND (expires_at IS NULL OR expires_at > NOW())""",
+                (verification_code,)
+            )
+            code_entry = cursor.fetchone()
+            if not code_entry:
+                return error_response("Invalid or already used village verification code", 400)
+            residency_status = "verified"
+            ward_id = code_entry["ward_id"]
+            verified_at = datetime.now()
+            verification_remarks = f"Instant verification via code {verification_code}"
+        elif resides_in_village and ward_id and address:
+            residency_status = "pending"
+            verification_remarks = "Residency declaration submitted during registration"
+
         hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         cursor.execute(
-            """INSERT INTO users (name, mobile, village, password_hash, role)
-               VALUES (%s, %s, %s, %s, 'citizen')""",
-            (name, mobile, village, hashed)
+            """INSERT INTO users (name, mobile, village, password_hash, role,
+                                 residency_status, residency_ward_id, residency_address,
+                                 verified_at, verification_remarks)
+               VALUES (%s, %s, %s, %s, 'citizen', %s, %s, %s, %s, %s)""",
+            (name, mobile, village, hashed, residency_status,
+             ward_id or None, address or None, verified_at, verification_remarks)
         )
         user_id = cursor.lastrowid
+
+        # Mark code as used if verified via code
+        if code_entry:
+            cursor.execute(
+                "UPDATE village_verification_codes SET is_used = 1, used_by = %s, used_at = NOW() WHERE code_id = %s",
+                (user_id, code_entry["code_id"])
+            )
+
+        # If pending with address, create a verification request
+        if residency_status == "pending" and ward_id and address:
+            cursor.execute(
+                """INSERT INTO resident_verification_requests
+                   (user_id, ward_id, address, proof_type, status)
+                   VALUES (%s, %s, %s, 'Self Declaration', 'pending')""",
+                (user_id, ward_id, address)
+            )
+
     db.commit()
 
     identity = {"user_id": user_id, "role": "citizen", "mobile": mobile}
@@ -79,9 +226,13 @@ def register():
                 "mobile": mobile,
                 "role": "citizen",
                 "village": village,
+                "residency_status": residency_status,
+                "is_verified_resident": residency_status == "verified",
+                "ward_id": ward_id,
+                "address": address,
             }
         },
-        message="Registration successful",
+        message="Registration successful" + (" and verified as Vemavaram resident!" if residency_status == "verified" else ""),
         status_code=201
     )
 
@@ -130,6 +281,10 @@ def citizen_login():
                 "mobile": mobile,
                 "role": role,
                 "village": user.get("village", "Vemavaram"),
+                "residency_status": user.get("residency_status") or "unverified",
+                "is_verified_resident": user.get("residency_status") == "verified",
+                "ward_id": user.get("residency_ward_id"),
+                "address": user.get("residency_address"),
             }
         },
         message="Login successful"
@@ -224,7 +379,7 @@ def admin_login():
     if not bcrypt.checkpw(password, stored_hash):
         return error_response("Invalid admin credentials", 401)
 
-    identity = {"user_id": user["user_id"], "role": "admin", "mobile": mobile}
+    identity = {"user_id": user["user_id"], "role": "admin", "mobile": mobile or user.get("mobile")}
     access_token  = create_access_token(identity=identity)
     refresh_token = create_refresh_token(identity=identity)
 
@@ -235,7 +390,8 @@ def admin_login():
             "user": {
                 "user_id": user["user_id"],
                 "name": user["name"],
-                "mobile": mobile,
+                "mobile": user.get("mobile"),
+                "email": user.get("email"),
                 "role": "admin",
                 "village": user.get("village", "Vemavaram"),
             }
@@ -246,8 +402,6 @@ def admin_login():
 
 # ─────────────────────────────────────────────
 # POST /api/auth/firebase-login
-# Verify Firebase Phone Auth ID token and return app JWT
-# (Used by Flutter mobile application)
 # ─────────────────────────────────────────────
 @auth_bp.route("/firebase-login", methods=["POST"])
 def firebase_login():
@@ -275,7 +429,6 @@ def firebase_login():
         user = cursor.fetchone()
 
         if not user:
-            # Auto-register citizen on first Firebase login
             display_name = name or decoded.get("name") or f"Citizen_{mobile[-4:]}"
             dummy_hash = bcrypt.hashpw(b"firebase_auth_citizen", bcrypt.gensalt()).decode("utf-8")
             cursor.execute(
@@ -288,11 +441,13 @@ def firebase_login():
             role = "citizen"
             user_name = display_name
             village = "Vemavaram"
+            residency_status = "unverified"
         else:
             user_id = user["user_id"]
             role = "citizen" if user["role"] == "villager" else user["role"]
             user_name = user["name"]
             village = user.get("village", "Vemavaram")
+            residency_status = user.get("residency_status") or "unverified"
 
     identity = {"user_id": user_id, "role": role, "mobile": mobile}
     access_token  = create_access_token(identity=identity)
@@ -308,6 +463,8 @@ def firebase_login():
                 "mobile": mobile,
                 "role": role,
                 "village": village,
+                "residency_status": residency_status,
+                "is_verified_resident": residency_status == "verified",
             }
         },
         message="Login successful"
@@ -370,7 +527,9 @@ def get_me():
     db = get_db()
     with db.cursor() as cursor:
         cursor.execute(
-            """SELECT u.user_id, u.name, u.mobile, u.village, u.role, u.created_at,
+            """SELECT u.user_id, u.name, u.mobile, u.email, u.village, u.role, u.created_at,
+                      u.residency_status, u.residency_ward_id, u.residency_address,
+                      u.verified_at, u.verification_remarks,
                       wp.department
                FROM users u
                LEFT JOIN worker_profiles wp ON u.user_id = wp.user_id
@@ -382,4 +541,5 @@ def get_me():
     if not user:
         return error_response("User not found", 404)
 
+    user["is_verified_resident"] = user.get("residency_status") == "verified"
     return success_response(data=user)

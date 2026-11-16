@@ -3,13 +3,15 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
   MdDashboard, MdReportProblem, MdPeople,
-  MdBarChart, MdFeedback, MdInsights, MdLogout, MdMap, MdPublic, MdLocationCity, MdCategory
+  MdBarChart, MdFeedback, MdInsights, MdLogout, MdMap, MdPublic, MdLocationCity, MdCategory,
+  MdVerifiedUser
 } from 'react-icons/md'
 
 const nav = [
   { to: '/dashboard',            icon: <MdDashboard />,     label: 'Dashboard' },
   { to: '/map',         icon: <MdMap />,           label: 'Village Map' },
   { to: '/complaints',  icon: <MdReportProblem />,  label: 'Complaints' },
+  { to: '/resident-verification', icon: <MdVerifiedUser />, label: 'Resident Verification' },
   { to: '/workers',     icon: <MdPeople />,         label: 'Workers' },
   { to: '/reports',     icon: <MdBarChart />,        label: 'Reports' },
   { to: '/wards',       icon: <MdLocationCity />,    label: 'Ward Analytics' },

@@ -52,6 +52,15 @@ export const complaintsApi = {
   getCategories: () => api.get('/complaints/categories'),
 }
 
+export const residentVerificationApi = {
+  getRequests: (params) => api.get('/admin/resident-verification/requests', { params }),
+  approveRequest: (requestId, remarks) => api.put(`/admin/resident-verification/${requestId}/approve`, { remarks }),
+  rejectRequest: (requestId, remarks) => api.put(`/admin/resident-verification/${requestId}/reject`, { remarks }),
+  getCodes: (params) => api.get('/admin/resident-verification/codes', { params }),
+  generateCodes: (data) => api.post('/admin/resident-verification/codes', data),
+  getStats: () => api.get('/admin/resident-verification/stats'),
+}
+
 export const workersApi = {
   getAll: (params) => api.get('/workers', { params }),
   create: (data) => api.post('/workers', data),

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Camera, AlertCircle, CheckCircle, Upload, X, MapPin, Tag, FileText, ArrowRight } from 'lucide-react';
+import { Camera, AlertCircle, CheckCircle, Upload, X, MapPin, Tag, FileText, ArrowRight, ShieldCheck } from 'lucide-react';
 import { complaintsApi, extractErrorMessage } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
@@ -15,15 +15,15 @@ const DEFAULT_CATEGORIES = [
 
 const WARDS = [1, 2, 3, 4, 5];
 
-export default function SubmitComplaintForm({ onSuccess, onNeedLogin }) {
+export default function SubmitComplaintForm({ onSuccess, onNeedLogin, onVerifyResidency }) {
     const { isAuthenticated, user } = useAuth();
 
     const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
     const [title, setTitle] = useState('');
     const [category, setCategory] = useState(DEFAULT_CATEGORIES[0]);
     const [description, setDescription] = useState('');
-    const [wardId, setWardId] = useState('1');
-    const [location, setLocation] = useState('');
+    const [wardId, setWardId] = useState(user?.residency_ward_id ? String(user.residency_ward_id) : '1');
+    const [location, setLocation] = useState(user?.residency_address || '');
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
 
@@ -32,7 +32,6 @@ export default function SubmitComplaintForm({ onSuccess, onNeedLogin }) {
     const [submittedComplaint, setSubmittedComplaint] = useState(null);
 
     useEffect(() => {
-        // Fetch categories from backend if available
         const fetchCategories = async () => {
             try {
                 const res = await complaintsApi.getCategories();
@@ -51,7 +50,6 @@ export default function SubmitComplaintForm({ onSuccess, onNeedLogin }) {
         const file = e.target.files[0];
         if (!file) return;
 
-        // Validation
         if (!file.type.startsWith('image/')) {
             setError('Please upload an image file (PNG, JPG, WEBP).');
             return;
@@ -88,12 +86,12 @@ export default function SubmitComplaintForm({ onSuccess, onNeedLogin }) {
         const trimmedDesc = description.trim();
         const trimmedLoc = location.trim();
 
-        if (!trimmedTitle) {
-            setError('Please provide a brief complaint title.');
+        if (!trimmedTitle || trimmedTitle.length < 5) {
+            setError('Please provide a meaningful complaint title (minimum 5 characters).');
             return;
         }
-        if (!trimmedDesc) {
-            setError('Please describe the problem in detail.');
+        if (!trimmedDesc || trimmedDesc.length < 20) {
+            setError('Please provide a detailed description (minimum 20 characters) so field workers can locate and resolve the issue.');
             return;
         }
         if (!trimmedLoc) {
@@ -147,17 +145,38 @@ export default function SubmitComplaintForm({ onSuccess, onNeedLogin }) {
                     <CheckCircle size={36} />
                 </div>
                 <h3 className="text-2xl font-bold font-poppins text-navy-900 mb-1">Complaint Registered!</h3>
-                <p className="text-gray-500 text-sm mb-6">
+                <p className="text-gray-500 text-sm mb-4">
                     Your complaint has been assigned a unique reference ID and submitted to Vemavaram Village authorities.
                 </p>
+
+                {submittedComplaint.is_duplicate_suspect && (
+                    <div className="mb-5 p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-left text-xs text-amber-900">
+                        <div className="flex items-center space-x-1.5 font-bold mb-1 text-amber-800">
+                            <AlertCircle size={15} className="text-amber-600" />
+                            <span>Possible Duplicate Notice</span>
+                        </div>
+                        <p>
+                            A similar issue was recently reported in this area (Reference: <strong>{submittedComplaint.duplicate_of_id}</strong>).
+                            Our Panchayat team has cross-linked these to optimize response and prevent duplicate fieldwork.
+                        </p>
+                    </div>
+                )}
 
                 <div className="bg-navy-50/70 border border-navy-100 rounded-2xl p-4 mb-6">
                     <span className="text-xs uppercase tracking-wider text-navy-600 font-bold block mb-1">Unique Complaint ID</span>
                     <span className="text-2xl font-bold font-poppins text-navy-900 tracking-wider">
                         {submittedComplaint.complaint_id}
                     </span>
-                    <div className="mt-2 text-xs text-gray-500">
-                        Category: <span className="font-semibold text-gray-700">{submittedComplaint.category}</span> • Priority: <span className="font-semibold text-gray-700">{submittedComplaint.smart_priority || 'Normal'}</span>
+                    <div className="mt-2 text-xs text-gray-500 flex items-center justify-center space-x-3">
+                        <span>Category: <strong className="text-gray-700">{submittedComplaint.category}</strong></span>
+                        <span>•</span>
+                        <span>
+                            {submittedComplaint.is_verified_resident ? (
+                                <span className="text-emerald-700 font-bold">✓ Verified Resident Submission</span>
+                            ) : (
+                                <span className="text-gray-600">Standard Submission</span>
+                            )}
+                        </span>
                     </div>
                 </div>
 
@@ -184,7 +203,7 @@ export default function SubmitComplaintForm({ onSuccess, onNeedLogin }) {
 
     return (
         <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100 max-w-2xl mx-auto">
-            <div className="mb-6">
+            <div className="mb-5">
                 <span className="inline-block bg-orange-50 text-orange-700 text-xs font-bold px-3 py-1 rounded-full mb-2 uppercase tracking-wide">
                     Vemavaram Citizen Portal
                 </span>
@@ -193,6 +212,34 @@ export default function SubmitComplaintForm({ onSuccess, onNeedLogin }) {
                     Fill out the form below. Your complaint will be routed to the respective ward department with automated SLA tracking.
                 </p>
             </div>
+
+            {/* Residency Status Indicator Banner */}
+            {isAuthenticated && (
+                user?.residency_status === 'verified' ? (
+                    <div className="mb-5 p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center space-x-2.5 text-xs text-emerald-900">
+                        <ShieldCheck size={18} className="text-emerald-600 flex-shrink-0" />
+                        <div>
+                            <span className="font-bold">Posting as Verified Resident (Ward {user.residency_ward_id || wardId}):</span> Your report is prioritized by village workers.
+                        </div>
+                    </div>
+                ) : (
+                    <div className="mb-5 p-3.5 bg-gray-50 border border-gray-200 rounded-2xl flex items-center justify-between text-xs text-gray-700">
+                        <div className="flex items-center space-x-2">
+                            <AlertCircle size={16} className="text-amber-500 flex-shrink-0" />
+                            <span>Posting as Unverified Citizen (verification pending).</span>
+                        </div>
+                        {onVerifyResidency && (
+                            <button
+                                type="button"
+                                onClick={onVerifyResidency}
+                                className="text-orange-600 font-bold hover:underline ml-2 whitespace-nowrap"
+                            >
+                                Verify Residency →
+                            </button>
+                        )}
+                    </div>
+                )
+            )}
 
             {!isAuthenticated && (
                 <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between">
@@ -263,14 +310,14 @@ export default function SubmitComplaintForm({ onSuccess, onNeedLogin }) {
                 <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5 flex items-center space-x-1">
                         <FileText size={14} className="text-blue-500" />
-                        <span>Brief Title *</span>
+                        <span>Brief Title * (min. 5 characters)</span>
                     </label>
                     <input
                         type="text"
                         required
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        placeholder="e.g. Broken drainage pipe near Primary School"
+                        placeholder="e.g. Broken drinking water pipeline near Ramalayam street"
                         disabled={loading}
                         className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-navy-300"
                     />
@@ -278,15 +325,20 @@ export default function SubmitComplaintForm({ onSuccess, onNeedLogin }) {
 
                 {/* Detailed Description */}
                 <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-                        Detailed Description *
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                            Detailed Description * (min. 20 characters)
+                        </label>
+                        <span className={`text-[11px] font-semibold ${description.trim().length >= 20 ? 'text-emerald-600' : 'text-gray-400'}`}>
+                            {description.trim().length} / 20 min characters
+                        </span>
+                    </div>
                     <textarea
                         required
                         rows={4}
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Provide details about the issue: when it started, severity, how it impacts residents..."
+                        placeholder="Describe the issue in detail: when did it start, exact spot, how it impacts the residents..."
                         disabled={loading}
                         className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-navy-300 resize-none"
                     />
@@ -296,14 +348,14 @@ export default function SubmitComplaintForm({ onSuccess, onNeedLogin }) {
                 <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5 flex items-center space-x-1">
                         <MapPin size={14} className="text-red-500" />
-                        <span>Exact Location / Street / Landmark *</span>
+                        <span>Exact Location / Street / Landmark in Vemavaram *</span>
                     </label>
                     <input
                         type="text"
                         required
                         value={location}
                         onChange={(e) => setLocation(e.target.value)}
-                        placeholder="e.g. Street 3, Opposite Water Tank, Vemavaram"
+                        placeholder="e.g. Near Ramalayam Temple, Street 2, Vemavaram"
                         disabled={loading}
                         className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-navy-300"
                     />
@@ -358,7 +410,7 @@ export default function SubmitComplaintForm({ onSuccess, onNeedLogin }) {
                     {loading ? (
                         <div className="flex items-center space-x-2">
                             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            <span>Submitting Complaint & Uploading Photo...</span>
+                            <span>Submitting Complaint & Checking Quality...</span>
                         </div>
                     ) : (
                         <span>Submit Official Complaint →</span>
@@ -368,4 +420,3 @@ export default function SubmitComplaintForm({ onSuccess, onNeedLogin }) {
         </div>
     );
 }
-

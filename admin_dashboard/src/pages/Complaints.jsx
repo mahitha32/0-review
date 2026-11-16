@@ -28,6 +28,8 @@ export default function Complaints() {
   const [search,     setSearch]     = useState('')
   const [filterStatus,   setFilterStatus]   = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [filterResidency, setFilterResidency] = useState('')
+  const [filterDuplicate, setFilterDuplicate] = useState('')
   const [page, setPage] = useState(1)
   // Modals
   const [viewModal,   setViewModal]   = useState(null)  // complaint detail
@@ -40,11 +42,19 @@ export default function Complaints() {
 
   const fetchComplaints = useCallback(() => {
     setLoading(true)
-    complaintsApi.getAll({ page, per_page:12, search, status:filterStatus, category:filterCategory })
+    complaintsApi.getAll({
+      page,
+      per_page: 12,
+      search,
+      status: filterStatus,
+      category: filterCategory,
+      residency: filterResidency || undefined,
+      duplicate: filterDuplicate || undefined
+    })
       .then(r => { setComplaints(r.data.data.complaints); setPagination(r.data.data.pagination) })
       .catch(() => toast.error('Failed to load complaints'))
       .finally(() => setLoading(false))
-  }, [page, search, filterStatus, filterCategory])
+  }, [page, search, filterStatus, filterCategory, filterResidency, filterDuplicate])
 
   useEffect(() => { fetchComplaints() }, [fetchComplaints])
   useEffect(() => {
@@ -105,6 +115,17 @@ export default function Complaints() {
             <option value="">All Categories</option>
             {CATEGORIES.map(c => <option key={c}>{c}</option>)}
           </select>
+          <select className="form-control" style={{width:160}}
+            value={filterResidency} onChange={e => { setFilterResidency(e.target.value); setPage(1) }}>
+            <option value="">All Residency</option>
+            <option value="verified">Verified Residents</option>
+            <option value="unverified">Unverified Citizens</option>
+          </select>
+          <select className="form-control" style={{width:160}}
+            value={filterDuplicate} onChange={e => { setFilterDuplicate(e.target.value); setPage(1) }}>
+            <option value="">All Complaints</option>
+            <option value="suspects">⚠️ Duplicates Flagged</option>
+          </select>
           <button className="btn btn-outline btn-sm" onClick={fetchComplaints}>
             <MdFilterList /> Refresh
           </button>
@@ -116,7 +137,7 @@ export default function Complaints() {
             <table>
               <thead>
                 <tr>
-                  <th>ID</th><th>Title</th><th>Category</th>
+                  <th>ID</th><th>Title & Authenticity</th><th>Category</th>
                   <th>Complainant</th><th>Status</th><th>Priority</th>
                   <th>Worker</th><th>Date</th><th>Actions</th>
                 </tr>
@@ -132,8 +153,26 @@ export default function Complaints() {
                 ) : complaints.map(c => (
                   <tr key={c.complaint_id}>
                     <td><code style={{fontSize:12, background:'#f1f5f9', padding:'2px 6px', borderRadius:4}}>{c.complaint_id}</code></td>
-                    <td style={{maxWidth:180}}>
+                    <td style={{maxWidth:220}}>
                       <div style={{fontWeight:600, fontSize:13}}>{c.title}</div>
+                      {c.is_duplicate_suspect === 1 && (
+                        <div style={{marginTop:3}}>
+                          <span
+                            style={{
+                              background:'#fef3c7',
+                              color:'#92400e',
+                              fontSize:10,
+                              padding:'2px 6px',
+                              borderRadius:4,
+                              fontWeight:700,
+                              border:'1px solid #fde68a'
+                            }}
+                            title={c.duplicate_reason || 'Similar issue recently reported'}
+                          >
+                            ⚠️ Duplicate of {c.duplicate_of_id}
+                          </span>
+                        </div>
+                      )}
                       {c.image_url && (
                         <img src={c.image_url} alt="" className="complaint-img"
                           style={{marginTop:4}} onClick={() => setImageModal(c.image_url)} />
@@ -142,7 +181,12 @@ export default function Complaints() {
                     <td><span className="badge">{catIcon(c.category)} {c.category}</span></td>
                     <td>
                       <div style={{fontSize:13, fontWeight:600}}>{c.user_name}</div>
-                      <div style={{fontSize:11, color:'#94a3b8'}}>{c.user_mobile}</div>
+                      <div style={{fontSize:11, color:'#94a3b8'}}>📱 {c.user_mobile}</div>
+                      {c.is_verified_resident ? (
+                        <span style={{fontSize:10, color:'#059669', fontWeight:700}}>✓ Verified Resident</span>
+                      ) : (
+                        <span style={{fontSize:10, color:'#64748b'}}>Unverified User</span>
+                      )}
                     </td>
                     <td><span className={`badge badge-${statusClass(c.status)}`}>{c.status}</span></td>
                     <td><span className={`badge badge-${(c.priority||'medium').toLowerCase()}`}>{c.priority}</span></td>
@@ -185,12 +229,42 @@ export default function Complaints() {
               <button className="modal-close" onClick={() => setViewModal(null)}><MdClose /></button>
             </div>
             <div className="modal-body">
+              {viewModal.is_duplicate_suspect === 1 && (
+                <div style={{
+                  background: '#fef3c7',
+                  border: '1px solid #fde68a',
+                  color: '#92400e',
+                  padding: 12,
+                  borderRadius: 6,
+                  marginBottom: 16,
+                  fontSize: 13
+                }}>
+                  <strong>⚠️ Possible Duplicate Complaint:</strong>
+                  <div style={{marginTop: 4}}>
+                    This complaint was flagged because an earlier complaint (<strong>{viewModal.duplicate_of_id}</strong>) was submitted for a similar issue.
+                  </div>
+                  {viewModal.duplicate_reason && (
+                    <div style={{fontSize: 12, marginTop: 4, color: '#b45309'}}>
+                      Reason: {viewModal.duplicate_reason}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="grid-2">
                 <div><label className="form-label">Category</label><p>{viewModal.category}</p></div>
                 <div><label className="form-label">Status</label>
                   <span className={`badge badge-${statusClass(viewModal.status)}`}>{viewModal.status}</span></div>
                 <div><label className="form-label">Location</label><p>{viewModal.location}</p></div>
-                <div><label className="form-label">Priority</label><p>{viewModal.priority}</p></div>
+                <div>
+                  <label className="form-label">Residency Status</label>
+                  <p>
+                    {viewModal.is_verified_resident ? (
+                      <span style={{color: '#059669', fontWeight: 700}}>✓ Verified Vemavaram Resident</span>
+                    ) : (
+                      <span style={{color: '#64748b'}}>Unverified User</span>
+                    )}
+                  </p>
+                </div>
               </div>
               <div className="form-group mt-16">
                 <label className="form-label">Description</label>

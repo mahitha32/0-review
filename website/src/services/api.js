@@ -86,6 +86,8 @@ export const authApi = {
   register: (payload) => api.post('/auth/register', payload),
   login: (payload) => api.post('/auth/login', payload),
   workerLogin: (payload) => api.post('/auth/worker-login', payload),
+  sendOtp: (payload) => api.post('/auth/send-otp', payload),
+  verifyOtp: (payload) => api.post('/auth/verify-otp', payload),
   getMe: () => api.get('/auth/me'),
   updateProfile: (payload) => api.put('/auth/profile', payload),
   logout: () => {
@@ -103,6 +105,18 @@ export const authApi = {
     }
   },
   isAuthenticated: () => !!localStorage.getItem('citizen_access_token'),
+};
+
+// ── Resident Verification API ─────────────────────────────────
+export const residentVerificationApi = {
+  getStatus: () => api.get('/resident-verification/status'),
+  requestVerification: (data) => {
+    const isFormData = data instanceof FormData;
+    return api.post('/resident-verification/request', data, {
+      headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+    });
+  },
+  verifyCode: (code) => api.post('/resident-verification/verify-code', { code }),
 };
 
 // ── Complaints API ───────────────────────────────────────────

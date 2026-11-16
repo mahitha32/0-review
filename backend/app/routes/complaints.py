@@ -4,7 +4,9 @@ Complaint CRUD routes for citizens & workers
 Village Complaint Redressal System - Vemavaram Village
 """
 
-from datetime import datetime
+import re
+import difflib
+from datetime import datetime, timedelta
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import get_db
@@ -38,9 +40,63 @@ def _generate_complaint_id(cursor) -> str:
     return format_complaint_id(year, seq)
 
 
+def _check_duplicate(new_comp, recent_complaints):
+    """
+    Checks for potential duplicate complaints in the same category within the past 14 days.
+    Does NOT reject outright; flags suspect duplicates for administrative cross-check.
+    """
+    def clean_text(t):
+        return re.sub(r'[^a-zA-Z0-9\s]', '', (t or '').lower()).strip()
+
+    def get_tokens(t):
+        stop_words = {"the", "is", "at", "in", "on", "a", "an", "and", "or", "to", "of", "for", "with", "near", "by"}
+        return set(w for w in clean_text(t).split() if len(w) > 2 and w not in stop_words)
+
+    new_title = clean_text(new_comp.get("title", ""))
+    new_desc = clean_text(new_comp.get("description", ""))
+    new_loc = clean_text(new_comp.get("location", ""))
+    new_ward = str(new_comp.get("ward_id") or "")
+    new_tokens = get_tokens(new_title + " " + new_desc)
+
+    for ex in recent_complaints:
+        ex_title = clean_text(ex.get("title", ""))
+        ex_desc = clean_text(ex.get("description", ""))
+        ex_loc = clean_text(ex.get("location", ""))
+        ex_ward = str(ex.get("ward_id") or "")
+
+        # 1. Location match
+        same_ward = (new_ward and ex_ward and new_ward == ex_ward)
+        same_loc = (new_loc and ex_loc and (new_loc in ex_loc or ex_loc in new_loc or difflib.SequenceMatcher(None, new_loc, ex_loc).ratio() > 0.70))
+
+        # 2. Text similarity
+        title_sim = difflib.SequenceMatcher(None, new_title, ex_title).ratio()
+        desc_sim = difflib.SequenceMatcher(None, new_desc, ex_desc).ratio()
+
+        ex_tokens = get_tokens(ex_title + " " + ex_desc)
+        jaccard = len(new_tokens & ex_tokens) / max(1, len(new_tokens | ex_tokens))
+
+        is_dup = False
+        if same_loc and (desc_sim > 0.45 or jaccard > 0.35 or title_sim > 0.60):
+            is_dup = True
+        elif same_ward and (desc_sim > 0.60 or jaccard > 0.50):
+            is_dup = True
+        elif desc_sim > 0.75 or (title_sim > 0.80 and jaccard > 0.40):
+            is_dup = True
+
+        if is_dup:
+            date_str = ex["created_at"].strftime("%d %b") if hasattr(ex["created_at"], "strftime") else "recently"
+            return {
+                "is_duplicate_suspect": 1,
+                "duplicate_of_id": ex["complaint_id"],
+                "duplicate_reason": f"Similar issue reported on {date_str} at {ex.get('location', '')} ({ex['complaint_id']})"
+            }
+
+    return {"is_duplicate_suspect": 0, "duplicate_of_id": None, "duplicate_reason": None}
+
+
 # ─────────────────────────────────────────────
 # POST /api/complaints
-# Create a new complaint (with optional Cloudinary image upload)
+# Create a new complaint (with quality validation, rate-limiting & duplicate detection)
 # ─────────────────────────────────────────────
 @complaints_bp.route("", methods=["POST"])
 @jwt_required()
@@ -70,17 +126,54 @@ def create_complaint():
         image_file  = None
 
     errors = []
-    if not title:
-        errors.append("Title is required")
-    if not description:
-        errors.append("Description is required")
-    if not location:
-        errors.append("Location is required")
+    # Quality validation
+    if not title or len(title) < 5:
+        errors.append("Title is required and must be at least 5 characters")
+
+    if not description or len(description) < 20:
+        errors.append("Description must be at least 20 characters to provide sufficient detail for village workers")
+    else:
+        # Check against repetitive gibberish
+        desc_clean = re.sub(r"\s+", "", description.lower())
+        if len(set(desc_clean)) < 4:
+            errors.append("Please provide a meaningful complaint description (repetitive characters detected)")
+
+    if not location or len(location) < 3:
+        errors.append("Location/Landmark in Vemavaram is required")
+
     if category and category not in VALID_CATEGORIES:
         errors.append(f"Invalid category. Must be one of: {', '.join(VALID_CATEGORIES)}")
 
     if errors:
         return error_response("Validation failed", 422, errors)
+
+    db = get_db()
+    with db.cursor() as cursor:
+        # 1. Rate limiting: Check complaints submitted by this user in the past 1 hour
+        cursor.execute(
+            """SELECT COUNT(*) as recent_count FROM complaints
+               WHERE user_id = %s AND created_at >= NOW() - INTERVAL 1 HOUR""",
+            (user_id,)
+        )
+        recent_count = cursor.fetchone()["recent_count"]
+        if recent_count >= 5:
+            return error_response(
+                "Hourly rate limit exceeded. You can submit a maximum of 5 complaints per hour to maintain system quality.",
+                429
+            )
+
+        # 2. Check user's village residency status
+        cursor.execute(
+            """SELECT residency_status, residency_ward_id, name FROM users WHERE user_id = %s""",
+            (user_id,)
+        )
+        user_info = cursor.fetchone() or {}
+        is_verified_resident = 1 if user_info.get("residency_status") == "verified" else 0
+        citizen_name = user_info.get("name") or "Citizen"
+
+        # Default ward_id to user's registered residency ward if not specified
+        if not ward_id and user_info.get("residency_ward_id"):
+            ward_id = user_info["residency_ward_id"]
 
     # AI category and priority classification
     ai_result = classify_complaint(title, description)
@@ -89,6 +182,27 @@ def create_complaint():
 
     if not category:
         category = ai_suggestion or VALID_CATEGORIES[0]
+
+    # 3. Duplicate Detection across past 14 days in the same category
+    with db.cursor() as cursor:
+        cursor.execute(
+            """SELECT complaint_id, title, description, location, ward_id, created_at
+               FROM complaints
+               WHERE category = %s
+                 AND status NOT IN ('Rejected')
+                 AND created_at >= NOW() - INTERVAL 14 DAY
+               ORDER BY created_at DESC LIMIT 30""",
+            (category,)
+        )
+        recent_in_cat = cursor.fetchall()
+
+    dup_check = _check_duplicate(
+        {"title": title, "description": description, "location": location, "ward_id": ward_id},
+        recent_in_cat
+    )
+    is_duplicate_suspect = dup_check["is_duplicate_suspect"]
+    duplicate_of_id      = dup_check["duplicate_of_id"]
+    duplicate_reason     = dup_check["duplicate_reason"]
 
     # Upload image to Cloudinary if provided
     image_url = None
@@ -99,41 +213,33 @@ def create_complaint():
         except Exception as e:
             return error_response(f"Image upload failed: {str(e)}", 500)
 
-    db = get_db()
+    # Insert complaint into database
     with db.cursor() as cursor:
         complaint_id = _generate_complaint_id(cursor)
         cursor.execute(
             """INSERT INTO complaints
                (complaint_id, user_id, title, category, description,
                 image_url, ai_category_suggestion, location, latitude, longitude,
-                ward_id, status, priority)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Submitted', %s)""",
+                ward_id, status, priority, is_verified_resident, is_duplicate_suspect,
+                duplicate_of_id, duplicate_reason)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Submitted', %s, %s, %s, %s, %s)""",
             (complaint_id, user_id, title, category, description,
              image_url, ai_suggestion, location, latitude or None, longitude or None,
-             ward_id or None, smart_priority)
+             ward_id or None, smart_priority, is_verified_resident, is_duplicate_suspect,
+             duplicate_of_id, duplicate_reason)
         )
         # Record status history audit trail
+        history_note = "Complaint submitted by " + ("verified village resident" if is_verified_resident else "citizen (unverified residency)")
         cursor.execute(
             """INSERT INTO complaint_status_history
                (complaint_id, old_status, new_status, changed_by, notes)
-               VALUES (%s, NULL, 'Submitted', %s, 'Complaint submitted by citizen')""",
-            (complaint_id, user_id)
+               VALUES (%s, NULL, 'Submitted', %s, %s)""",
+            (complaint_id, user_id, history_note)
         )
     db.commit()
 
     # Trigger in-app & push notification to citizen
     notify_complaint_received(user_id, complaint_id)
-
-    # Fetch citizen name for personalized official email alert
-    citizen_name = "Citizen"
-    try:
-        with db.cursor() as cursor:
-            cursor.execute("SELECT name FROM users WHERE user_id = %s", (user_id,))
-            user_row = cursor.fetchone()
-            if user_row and user_row.get("name"):
-                citizen_name = user_row["name"]
-    except Exception:
-        pass
 
     # Send outgoing email notification to official admin email (gadalamahithavasavi@gmail.com)
     try:
@@ -152,6 +258,10 @@ def create_complaint():
         from flask import current_app
         current_app.logger.error(f"Outgoing complaint email alert error (non-fatal): {email_err}")
 
+    response_message = "Complaint submitted successfully"
+    if is_duplicate_suspect:
+        response_message += f". Notice: A similar issue was recently reported ({duplicate_of_id}). The Panchayat team will review to prevent duplicate work."
+
     return success_response(
         data={
             "complaint_id": complaint_id,
@@ -159,8 +269,12 @@ def create_complaint():
             "ai_suggestion": ai_suggestion,
             "smart_priority": smart_priority,
             "image_url": image_url,
+            "is_verified_resident": bool(is_verified_resident),
+            "is_duplicate_suspect": bool(is_duplicate_suspect),
+            "duplicate_of_id": duplicate_of_id,
+            "duplicate_reason": duplicate_reason,
         },
-        message="Complaint submitted successfully",
+        message=response_message,
         status_code=201
     )
 
@@ -283,6 +397,7 @@ def track_complaint_public(complaint_id):
         cursor.execute(
             """SELECT complaint_id, title, category, description, location,
                       ward_id, status, priority, image_url, resolution_image_url, resolution_notes,
+                      is_verified_resident, is_duplicate_suspect, duplicate_of_id,
                       created_at, resolved_at
                FROM complaints WHERE complaint_id = %s""",
             (complaint_id,)
@@ -303,7 +418,7 @@ def track_complaint_public(complaint_id):
         )
         history = cursor.fetchall()
 
-        # Assignment info (sanitized for public view: only department and assignment notes)
+        # Assignment info
         cursor.execute(
             """SELECT a.assignment_id, a.notes as assignment_notes, a.assigned_at,
                       wp.department
@@ -315,7 +430,7 @@ def track_complaint_public(complaint_id):
         )
         assignment = cursor.fetchone()
 
-        # Public feedback summary if available
+        # Public feedback summary
         cursor.execute(
             "SELECT rating, remarks, created_at FROM feedback WHERE complaint_id = %s",
             (complaint_id,)
@@ -342,7 +457,7 @@ def get_gallery():
     query = """
         SELECT complaint_id, title, category, description, location,
                status, priority, image_url, resolution_image_url, resolution_notes,
-               created_at, resolved_at
+               is_verified_resident, created_at, resolved_at
         FROM complaints
         WHERE (image_url IS NOT NULL AND image_url != '')
            OR (resolution_image_url IS NOT NULL AND resolution_image_url != '')

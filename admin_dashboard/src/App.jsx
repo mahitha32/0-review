@@ -16,6 +16,7 @@ import VillageMapComponent from './components/VillageMap'
 import LandingPage from './pages/LandingPage'
 import WardAnalytics from './pages/WardAnalytics'
 import AssetRegistry from './pages/AssetRegistry'
+import ResidentVerification from './pages/ResidentVerification'
 
 function VillageMapPage() {
   return (
@@ -53,6 +54,7 @@ function PrivateLayout() {
           <Routes>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/complaints" element={<Complaints />} />
+            <Route path="/resident-verification" element={<ResidentVerification />} />
             <Route path="/workers"    element={<Workers />} />
             <Route path="/reports"    element={<Reports />} />
             <Route path="/feedback"   element={<FeedbackPage />} />
