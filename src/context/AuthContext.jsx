@@ -75,25 +75,38 @@ export function AuthProvider({ children }) {
         }
     };
 
-    const register = async ({ name, mobile, password, village = 'Vemavaram' }) => {
+    const register = async (payload) => {
         try {
-            const res = await authApi.register({ name, mobile, password, village });
+            const res = await authApi.register(payload);
             const data = res.data?.data;
             if (data?.access_token) {
                 localStorage.setItem('citizen_access_token', data.access_token);
                 if (data.refresh_token) {
                     localStorage.setItem('citizen_refresh_token', data.refresh_token);
                 }
-                const userData = data.user || { name, mobile, role: 'citizen', village };
+                const userData = data.user || { name: payload.name, mobile: payload.mobile, role: 'citizen', village: payload.village || 'Vemavaram' };
                 localStorage.setItem('citizen_user', JSON.stringify(userData));
                 setToken(data.access_token);
                 setUser(userData);
-                return { success: true, user: userData };
+                return { success: true, user: userData, message: res.data?.message };
             }
             throw new Error('Registration failed to return token');
         } catch (err) {
             const message = extractErrorMessage(err);
             return { success: false, error: message };
+        }
+    };
+
+    const refreshUser = async () => {
+        try {
+            const res = await authApi.getMe();
+            if (res.data?.data) {
+                setUser(res.data.data);
+                localStorage.setItem('citizen_user', JSON.stringify(res.data.data));
+                return res.data.data;
+            }
+        } catch {
+            return null;
         }
     };
 
@@ -107,9 +120,11 @@ export function AuthProvider({ children }) {
         user,
         token,
         isAuthenticated: !!token,
+        isVerifiedResident: user?.residency_status === 'verified',
         loading,
         login,
         register,
+        refreshUser,
         logout,
         setUser,
     };

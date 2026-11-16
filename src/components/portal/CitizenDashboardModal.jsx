@@ -2,16 +2,17 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     X, PlusCircle, RefreshCw, AlertCircle, CheckCircle, Clock,
-    FileText, Bell, Star, MapPin, Calendar, Camera, Wrench, Send, LogOut, User
+    FileText, Bell, Star, MapPin, Calendar, Camera, Wrench, Send, LogOut, User,
+    ShieldCheck, Key, Home, Check
 } from 'lucide-react';
-import { complaintsApi, notificationsApi, feedbackApi, extractErrorMessage } from '../../services/api';
+import { complaintsApi, notificationsApi, feedbackApi, residentVerificationApi, extractErrorMessage } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import SubmitComplaintForm from './SubmitComplaintForm';
 
 export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplaint }) {
-    const { user, logout } = useAuth();
+    const { user, logout, refreshUser } = useAuth();
 
-    const [activeTab, setActiveTab] = useState('complaints'); // 'complaints' | 'submit' | 'notifications' | 'profile'
+    const [activeTab, setActiveTab] = useState('complaints'); // 'complaints' | 'submit' | 'verification' | 'notifications'
     const [complaints, setComplaints] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -33,6 +34,18 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
 
     // Status filter
     const [statusFilter, setStatusFilter] = useState('All');
+
+    // Resident verification state
+    const [verStatus, setVerStatus] = useState(null);
+    const [loadingVer, setLoadingVer] = useState(false);
+    const [verWard, setVerWard] = useState('1');
+    const [verAddress, setVerAddress] = useState('');
+    const [verProofType, setVerProofType] = useState('Ration Card');
+    const [verProofMaskedId, setVerProofMaskedId] = useState('');
+    const [verCode, setVerCode] = useState('');
+    const [verActionLoading, setVerActionLoading] = useState(false);
+    const [verMessage, setVerMessage] = useState('');
+    const [verError, setVerError] = useState('');
 
     const loadComplaints = async () => {
         setLoading(true);
@@ -61,10 +74,27 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
         }
     };
 
+    const loadVerification = async () => {
+        setLoadingVer(true);
+        try {
+            const res = await residentVerificationApi.getStatus();
+            if (res.data?.data) {
+                setVerStatus(res.data.data);
+                if (res.data.data.ward_id) setVerWard(String(res.data.data.ward_id));
+                if (res.data.data.address) setVerAddress(res.data.data.address);
+            }
+        } catch {
+            // ignore
+        } finally {
+            setLoadingVer(false);
+        }
+    };
+
     useEffect(() => {
         if (isOpen) {
             loadComplaints();
             loadNotifications();
+            loadVerification();
         }
     }, [isOpen]);
 
@@ -99,13 +129,61 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
             });
 
             setFeedbackSuccess('Thank you! Your feedback has been recorded.');
-            // Refresh single complaint details and list
             openComplaintDetails(selectedComplaint.complaint_id);
             loadComplaints();
         } catch (err) {
             setFeedbackError(extractErrorMessage(err));
         } finally {
             setSubmittingFeedback(false);
+        }
+    };
+
+    const handleVerifyCode = async (e) => {
+        e.preventDefault();
+        setVerError('');
+        setVerMessage('');
+        const code = verCode.trim().toUpperCase();
+        if (!code) {
+            setVerError('Please enter the Panchayat verification code.');
+            return;
+        }
+        setVerActionLoading(true);
+        try {
+            const res = await residentVerificationApi.verifyCode(code);
+            setVerMessage(res.data?.message || 'Residency verified successfully!');
+            setVerCode('');
+            await refreshUser();
+            await loadVerification();
+        } catch (err) {
+            setVerError(extractErrorMessage(err));
+        } finally {
+            setVerActionLoading(false);
+        }
+    };
+
+    const handleRequestReview = async (e) => {
+        e.preventDefault();
+        setVerError('');
+        setVerMessage('');
+        if (!verAddress.trim() || verAddress.trim().length < 5) {
+            setVerError('Please provide your residential address in Vemavaram (min. 5 characters).');
+            return;
+        }
+        setVerActionLoading(true);
+        try {
+            const res = await residentVerificationApi.requestVerification({
+                ward_id: parseInt(verWard, 10),
+                address: verAddress.trim(),
+                proof_type: verProofType,
+                proof_masked_id: verProofMaskedId.trim() || undefined,
+            });
+            setVerMessage(res.data?.message || 'Verification request submitted! Awaiting Panchayat review.');
+            await refreshUser();
+            await loadVerification();
+        } catch (err) {
+            setVerError(extractErrorMessage(err));
+        } finally {
+            setVerActionLoading(false);
         }
     };
 
@@ -123,7 +201,6 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
 
     if (!isOpen) return null;
 
-    // Derived statistics
     const totalComplaints = complaints.length;
     const resolvedComplaints = complaints.filter(c => c.status === 'Resolved').length;
     const inProgressComplaints = complaints.filter(c => c.status === 'In Progress' || c.status === 'Assigned').length;
@@ -132,6 +209,9 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
     const filteredComplaints = statusFilter === 'All'
         ? complaints
         : complaints.filter(c => c.status.toLowerCase() === statusFilter.toLowerCase());
+
+    const isVerified = user?.residency_status === 'verified' || verStatus?.is_verified;
+    const isPending = user?.residency_status === 'pending' || verStatus?.residency_status === 'pending';
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-navy-950/70 backdrop-blur-sm">
@@ -150,11 +230,28 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
                         <div>
                             <div className="flex items-center space-x-2">
                                 <h3 className="text-lg font-bold font-poppins">{user?.name || 'Citizen'}</h3>
-                                <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider border border-emerald-400/30">
-                                    Vemavaram Citizen
-                                </span>
+                                {isVerified ? (
+                                    <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-emerald-400/30 flex items-center space-x-1">
+                                        <CheckCircle size={10} />
+                                        <span>Verified Resident</span>
+                                    </span>
+                                ) : isPending ? (
+                                    <span className="bg-amber-500/20 text-amber-300 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-400/30 flex items-center space-x-1 animate-pulse">
+                                        <Clock size={10} />
+                                        <span>Verification Pending</span>
+                                    </span>
+                                ) : (
+                                    <button
+                                        onClick={() => setActiveTab('verification')}
+                                        className="bg-white/10 hover:bg-white/20 text-white/80 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-white/20 flex items-center space-x-1 transition-colors"
+                                    >
+                                        <span>Unverified • Click to Verify</span>
+                                    </button>
+                                )}
                             </div>
-                            <p className="text-white/60 text-xs mt-0.5">Mobile: {user?.mobile} • Gram Panchayat: Vemavaram</p>
+                            <p className="text-white/60 text-xs mt-0.5">
+                                Mobile: {user?.mobile} • Ward {user?.residency_ward_id || verStatus?.ward_id || '1'} • Vemavaram Gram Panchayat
+                            </p>
                         </div>
                     </div>
 
@@ -182,6 +279,12 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
                     {[
                         { id: 'complaints', label: 'My Complaints', icon: FileText, badge: totalComplaints },
                         { id: 'submit', label: 'Report New Issue', icon: PlusCircle },
+                        {
+                            id: 'verification',
+                            label: 'Resident Verification',
+                            icon: ShieldCheck,
+                            badge: isVerified ? 'Verified' : isPending ? 'Pending' : 'Unverified'
+                        },
                         { id: 'notifications', label: 'Notifications', icon: Bell, badge: unreadCount > 0 ? unreadCount : null },
                     ].map((tab) => {
                         const Icon = tab.icon;
@@ -200,6 +303,8 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
                                 <span>{tab.label}</span>
                                 {tab.badge !== null && tab.badge !== undefined && (
                                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                        tab.badge === 'Verified' ? 'bg-emerald-100 text-emerald-800' :
+                                        tab.badge === 'Pending' ? 'bg-amber-100 text-amber-800' :
                                         isActive ? 'bg-orange-100 text-orange-700' : 'bg-gray-200 text-gray-700'
                                     }`}>
                                         {tab.badge}
@@ -222,7 +327,199 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
                                     openComplaintDetails(created.complaint_id);
                                 }
                             }}
+                            onVerifyResidency={() => setActiveTab('verification')}
                         />
+                    )}
+
+                    {/* RESIDENT VERIFICATION TAB */}
+                    {activeTab === 'verification' && (
+                        <div className="max-w-2xl mx-auto space-y-6">
+                            <div className="text-center sm:text-left">
+                                <h3 className="text-xl font-bold font-poppins text-navy-900">Village Resident Verification</h3>
+                                <p className="text-gray-500 text-xs mt-1">
+                                    Residency verification confirms you reside in Vemavaram Village. Verified resident complaints receive prioritized SLA response and genuine validation.
+                                </p>
+                            </div>
+
+                            {verMessage && (
+                                <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-xs flex items-center space-x-2">
+                                    <CheckCircle size={16} className="text-emerald-600 flex-shrink-0" />
+                                    <span>{verMessage}</span>
+                                </div>
+                            )}
+
+                            {verError && (
+                                <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-xs flex items-center space-x-2">
+                                    <AlertCircle size={16} className="text-red-600 flex-shrink-0" />
+                                    <span>{verError}</span>
+                                </div>
+                            )}
+
+                            {/* Status Card */}
+                            {isVerified ? (
+                                <div className="p-6 bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-3xl space-y-3">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md">
+                                            <ShieldCheck size={26} />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-emerald-950 font-poppins text-base">Verified Vemavaram Resident</h4>
+                                            <span className="text-xs text-emerald-700">Official Gram Panchayat Verification Confirmed</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid sm:grid-cols-2 gap-3 pt-3 border-t border-emerald-100 text-xs text-emerald-900">
+                                        <div>
+                                            <span className="text-emerald-600 block">Registered Ward:</span>
+                                            <strong>Ward {verStatus?.ward_id || user?.residency_ward_id || '1'} (Vemavaram)</strong>
+                                        </div>
+                                        <div>
+                                            <span className="text-emerald-600 block">Residential Address:</span>
+                                            <strong>{verStatus?.address || user?.residency_address || 'Vemavaram Village'}</strong>
+                                        </div>
+                                    </div>
+
+                                    {verStatus?.verification_remarks && (
+                                        <div className="text-[11px] bg-white/80 p-2.5 rounded-xl border border-emerald-100 text-emerald-800">
+                                            <strong>Panchayat Note: </strong>{verStatus.verification_remarks}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : isPending ? (
+                                <div className="p-6 bg-amber-50 border border-amber-200 rounded-3xl space-y-3">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md">
+                                            <Clock size={26} />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-amber-950 font-poppins text-base">Verification Under Review</h4>
+                                            <span className="text-xs text-amber-800">Your residency details were submitted and are being verified by Panchayat Officers</span>
+                                        </div>
+                                    </div>
+                                    <div className="text-xs text-amber-900 pt-2 border-t border-amber-100">
+                                        Ward: <strong>Ward {verStatus?.latest_request?.ward_id || verWard}</strong> • Address: <strong>{verStatus?.latest_request?.address || verAddress}</strong>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500">
+                                        You can still submit complaints right now. Once approved, all your complaints will be marked with the Verified Resident badge automatically.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    {/* Option 1: Instant Verification via Code */}
+                                    <div className="p-6 bg-navy-50/60 border border-navy-100 rounded-3xl">
+                                        <div className="flex items-center space-x-2 text-navy-900 font-bold text-sm mb-1">
+                                            <Key size={16} className="text-orange-500" />
+                                            <span>Method 1: Instant Panchayat Verification Code</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 mb-4">
+                                            If the Gram Panchayat or Ward Member gave you a code, enter it below for instant verification.
+                                        </p>
+
+                                        <form onSubmit={handleVerifyCode} className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. VEM-W1-2026"
+                                                value={verCode}
+                                                onChange={(e) => setVerCode(e.target.value.toUpperCase())}
+                                                disabled={verActionLoading}
+                                                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-navy-300"
+                                            />
+                                            <button
+                                                type="submit"
+                                                disabled={verActionLoading || !verCode.trim()}
+                                                className="px-5 py-2.5 bg-navy-900 hover:bg-navy-800 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all shadow-sm"
+                                            >
+                                                {verActionLoading ? 'Verifying…' : 'Verify Code'}
+                                            </button>
+                                        </form>
+                                    </div>
+
+                                    {/* Option 2: Request Officer Verification */}
+                                    <div className="p-6 bg-white border border-gray-200 rounded-3xl space-y-4">
+                                        <div className="flex items-center space-x-2 text-navy-900 font-bold text-sm">
+                                            <Home size={16} className="text-emerald-600" />
+                                            <span>Method 2: Request Gram Panchayat Officer Review</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500">
+                                            Provide your ward and address in Vemavaram. A Panchayat officer will verify it against the ward register.
+                                        </p>
+
+                                        <form onSubmit={handleRequestReview} className="space-y-3.5">
+                                            <div className="grid sm:grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Ward Number *</label>
+                                                    <select
+                                                        value={verWard}
+                                                        onChange={(e) => setVerWard(e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white"
+                                                    >
+                                                        <option value="1">Ward 1 (Vemavaram)</option>
+                                                        <option value="2">Ward 2 (Vemavaram)</option>
+                                                        <option value="3">Ward 3 (Vemavaram)</option>
+                                                        <option value="4">Ward 4 (Vemavaram)</option>
+                                                        <option value="5">Ward 5 (Vemavaram)</option>
+                                                    </select>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Proof Type *</label>
+                                                    <select
+                                                        value={verProofType}
+                                                        onChange={(e) => setVerProofType(e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs bg-white"
+                                                    >
+                                                        <option value="Ration Card">Ration Card (Local Household)</option>
+                                                        <option value="Electricity Bill">Electricity Bill</option>
+                                                        <option value="House Tax Receipt">House Tax Receipt</option>
+                                                        <option value="Voter ID">Voter ID (Vemavaram Constituency)</option>
+                                                        <option value="Panchayat Resident Certificate">Panchayat Resident Certificate</option>
+                                                        <option value="Self Declaration">Self Declaration (Ward Member Known)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                                                    Residential Address in Vemavaram *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    placeholder="Street name, landmark, or house door number"
+                                                    value={verAddress}
+                                                    onChange={(e) => setVerAddress(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                                                    Proof Reference Identifier (Optional)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="e.g. EB Service No, Ration Card No, or last 4 digits"
+                                                    value={verProofMaskedId}
+                                                    onChange={(e) => setVerProofMaskedId(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs"
+                                                />
+                                                <span className="text-[10px] text-gray-500 block mt-1">
+                                                    🔒 Privacy Note: For UIDAI legal compliance, complete 12-digit Aadhaar numbers are never collected or stored.
+                                                </span>
+                                            </div>
+
+                                            <button
+                                                type="submit"
+                                                disabled={verActionLoading}
+                                                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center space-x-1"
+                                            >
+                                                <span>{verActionLoading ? 'Submitting…' : 'Submit for Panchayat Verification →'}</span>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     )}
 
                     {/* NOTIFICATIONS TAB */}
@@ -240,9 +537,10 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
                             </div>
 
                             {notifications.length === 0 ? (
-                                <div className="text-center py-12 text-gray-400">
-                                    <Bell size={40} className="mx-auto mb-2 opacity-30" />
-                                    <p className="text-sm">No notifications yet. You will receive updates as your complaints are processed.</p>
+                                <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                                    <Bell size={36} className="mx-auto mb-2 text-gray-300" />
+                                    <p className="text-sm font-semibold text-gray-700">No notifications yet</p>
+                                    <p className="text-xs text-gray-400 mt-1">You will receive live updates when workers update your complaints.</p>
                                 </div>
                             ) : (
                                 notifications.map((notif) => (
@@ -363,12 +661,22 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
                                         className="p-5 bg-white rounded-2xl border border-gray-100 shadow-card hover:shadow-card-hover transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                                     >
                                         <div className="space-y-1">
-                                            <div className="flex items-center space-x-2">
+                                            <div className="flex items-center space-x-2 flex-wrap">
                                                 <span className="text-xs font-bold text-navy-800 font-poppins">{c.complaint_id}</span>
                                                 <span className="text-xs text-gray-400">•</span>
                                                 <span className="text-xs font-semibold text-orange-600">{c.category}</span>
                                                 <span className="text-xs text-gray-400">•</span>
                                                 <span className="text-xs text-gray-500">Ward {c.ward_id || '1'}</span>
+                                                {c.is_verified_resident === 1 && (
+                                                    <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                                                        ✓ Verified Resident
+                                                    </span>
+                                                )}
+                                                {c.is_duplicate_suspect === 1 && (
+                                                    <span className="text-[10px] bg-amber-50 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                                                        ⚠️ Suspect Duplicate
+                                                    </span>
+                                                )}
                                             </div>
                                             <h4 className="font-bold text-sm text-navy-900">{c.title}</h4>
                                             <div className="text-xs text-gray-500 flex items-center space-x-2">
@@ -410,6 +718,24 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
                                 <span>← Back to all complaints</span>
                             </button>
 
+                            {selectedComplaint.is_duplicate_suspect === 1 && (
+                                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-900 space-y-1">
+                                    <div className="flex items-center space-x-2 font-bold text-amber-800">
+                                        <AlertCircle size={16} className="text-amber-600" />
+                                        <span>Cross-Reference Notice: Potential Duplicate Complaint</span>
+                                    </div>
+                                    <p>
+                                        This complaint is flagged as similar to earlier report <strong>{selectedComplaint.duplicate_of_id}</strong>.
+                                        Village workers will review both together to avoid duplicate effort.
+                                    </p>
+                                    {selectedComplaint.duplicate_reason && (
+                                        <div className="text-[11px] text-amber-700 mt-1">
+                                            Reason: {selectedComplaint.duplicate_reason}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {/* Details Header */}
                             <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100">
                                 <div>
@@ -442,6 +768,15 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
                                     <span className="bg-gray-100 px-2.5 py-1 rounded-lg font-medium">
                                         Location: <strong>{selectedComplaint.location}</strong>
                                     </span>
+                                    {selectedComplaint.is_verified_resident ? (
+                                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg font-bold">
+                                            ✓ Verified Resident Report
+                                        </span>
+                                    ) : (
+                                        <span className="bg-gray-100 text-gray-600 px-2.5 py-1 rounded-lg font-medium">
+                                            Standard Citizen Report
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="p-4 bg-gray-50/70 rounded-xl text-sm text-gray-700 whitespace-pre-line border border-gray-100">
                                     {selectedComplaint.description}
@@ -518,7 +853,7 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
                                 </div>
                             )}
 
-                            {/* CITIZEN FEEDBACK SECTION (STEP 8) */}
+                            {/* CITIZEN FEEDBACK SECTION */}
                             {selectedComplaint.status === 'Resolved' && (
                                 <div className="p-6 bg-gradient-to-br from-amber-50/60 to-orange-50/60 rounded-3xl border border-amber-200">
                                     <h4 className="text-base font-bold font-poppins text-navy-900 mb-1 flex items-center space-x-1.5">
@@ -548,83 +883,68 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
                                                     </p>
                                                 )}
                                             </div>
-                                            <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full self-start sm:self-center">
-                                                Feedback Recorded ✓
-                                            </span>
                                         </div>
                                     ) : (
-                                        <form onSubmit={handleFeedbackSubmit} className="mt-4 space-y-4 bg-white p-5 rounded-2xl border border-amber-100">
+                                        <form onSubmit={handleFeedbackSubmit} className="mt-4 space-y-4">
                                             <p className="text-xs text-gray-600">
-                                                This issue was marked as <strong>Resolved</strong> by the village field team. Please rate the quality of the work and service.
+                                                Please rate the resolution work done by the Vemavaram maintenance team.
                                             </p>
 
+                                            <div>
+                                                <span className="text-xs font-bold text-navy-900 block mb-1">Your Rating *</span>
+                                                <div className="flex items-center space-x-2">
+                                                    {[1, 2, 3, 4, 5].map((num) => (
+                                                        <button
+                                                            key={num}
+                                                            type="button"
+                                                            onClick={() => setFeedbackRating(num)}
+                                                            className={`p-2 rounded-xl transition-all ${
+                                                                feedbackRating >= num
+                                                                    ? 'text-amber-500 bg-amber-100/50 scale-105'
+                                                                    : 'text-gray-300 hover:text-amber-400'
+                                                            }`}
+                                                        >
+                                                            <Star size={24} fill={feedbackRating >= num ? 'currentColor' : 'none'} />
+                                                        </button>
+                                                    ))}
+                                                    <span className="text-xs font-bold text-navy-800 ml-2">
+                                                        {feedbackRating} of 5 Stars
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="text-xs font-bold text-navy-900 block mb-1">Feedback Comments (Optional)</label>
+                                                <textarea
+                                                    rows={2}
+                                                    value={feedbackRemarks}
+                                                    onChange={(e) => setFeedbackRemarks(e.target.value)}
+                                                    placeholder="Was the work done properly? Any comments for the Panchayat authorities..."
+                                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-navy-300 resize-none bg-white"
+                                                />
+                                            </div>
+
                                             {feedbackSuccess && (
-                                                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-xs flex items-center space-x-2">
+                                                <div className="p-3 bg-emerald-100 text-emerald-800 rounded-xl text-xs font-semibold flex items-center space-x-1.5">
                                                     <CheckCircle size={16} />
                                                     <span>{feedbackSuccess}</span>
                                                 </div>
                                             )}
 
                                             {feedbackError && (
-                                                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs">
-                                                    {feedbackError}
+                                                <div className="p-3 bg-red-100 text-red-800 rounded-xl text-xs font-semibold flex items-center space-x-1.5">
+                                                    <AlertCircle size={16} />
+                                                    <span>{feedbackError}</span>
                                                 </div>
                                             )}
-
-                                            <div>
-                                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                                                    Satisfaction Rating (1 to 5 Stars) *
-                                                </label>
-                                                <div className="flex items-center space-x-2 pt-1">
-                                                    {[1, 2, 3, 4, 5].map((star) => (
-                                                        <button
-                                                            key={star}
-                                                            type="button"
-                                                            onClick={() => setFeedbackRating(star)}
-                                                            className="p-1 hover:scale-110 transition-transform"
-                                                        >
-                                                            <Star
-                                                                size={28}
-                                                                fill={star <= feedbackRating ? '#F59E0B' : 'none'}
-                                                                className={star <= feedbackRating ? 'text-amber-500' : 'text-gray-300'}
-                                                            />
-                                                        </button>
-                                                    ))}
-                                                    <span className="text-xs font-bold text-navy-800 ml-2">
-                                                        {feedbackRating === 5 ? 'Excellent' :
-                                                         feedbackRating === 4 ? 'Good' :
-                                                         feedbackRating === 3 ? 'Satisfactory' :
-                                                         feedbackRating === 2 ? 'Needs Improvement' : 'Unsatisfactory'}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                                                    Feedback Comments / Remarks
-                                                </label>
-                                                <textarea
-                                                    rows={3}
-                                                    value={feedbackRemarks}
-                                                    onChange={(e) => setFeedbackRemarks(e.target.value)}
-                                                    placeholder="Share any comments regarding the work done, punctuality, or lasting quality..."
-                                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
-                                                />
-                                            </div>
 
                                             <button
                                                 type="submit"
                                                 disabled={submittingFeedback}
-                                                className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center space-x-1.5"
+                                                className="px-6 py-2.5 bg-navy-900 hover:bg-navy-800 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center space-x-1.5"
                                             >
-                                                {submittingFeedback ? (
-                                                    <span>Submitting...</span>
-                                                ) : (
-                                                    <>
-                                                        <Send size={14} />
-                                                        <span>Submit Citizen Feedback</span>
-                                                    </>
-                                                )}
+                                                <Send size={14} />
+                                                <span>{submittingFeedback ? 'Submitting...' : 'Submit Resolution Feedback'}</span>
                                             </button>
                                         </form>
                                     )}
@@ -637,4 +957,3 @@ export default function CitizenDashboardModal({ isOpen, onClose, onTrackComplain
         </div>
     );
 }
-
